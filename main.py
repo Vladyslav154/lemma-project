@@ -114,3 +114,4 @@ async def read_pad_with_id(request: Request, board_id: str):
 @app.get("/qr", response_class=HTMLResponse)
 async def read_qr(request: Request):
     return templates.TemplateResponse("qr.html", {"request": request})
+    # -- Project version 2 --

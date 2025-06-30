@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lemma Tools</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa;
+            color: #212529;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            padding: 2rem;
+        }
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        p.subtitle {
+            font-size: 1.25rem;
+            color: #6c757d;
+            margin-bottom: 3rem;
+        }
+        .tools-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        .tool-card {
+            background-color: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.75rem;
+            padding: 2rem;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .tool-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        .tool-card h2 {
+            margin-top: 0;
+            font-size: 1.5rem;
+        }
+        .tool-card p {
+            color: #6c757d;
+            line-height: 1.6;
+        }
+        @media (max-width: 768px) {
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+            h1 {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="tools-grid">
+    <a href="/drop" class="tool-card">
+        <h2>Drop</h2>
+        <p>Безопасно передайте файл. Ссылка сработает один раз и исчезнет навсегда.</p>
+    </a>
+    <a href="/pad" class="tool-card">
+        <h2>Pad</h2>
+        <p>Общий блокнот для мгновенной синхронизации текста между вашими устройствами.</p>
+    </a>
+
+    <a href="/qr" class="tool-card">
+        <h2>QR</h2>
+        <p>Создайте QR-код для ссылки или текста. Приватно и мгновенно.</p>
+    </a>
+    </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drop - Lemma Tools</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa;
+            color: #212529;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+        }
+        .container {
+            width: 90%;
+            max-width: 600px;
+            padding: 2rem;
+        }
+        #drop-zone {
+            border: 3px dashed #adb5bd;
+            border-radius: 1rem;
+            padding: 4rem 2rem;
+            cursor: pointer;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+        #drop-zone.dragover {
+            border-color: #0d6efd;
+            background-color: #e7f1ff;
+        }
+        #drop-zone p {
+            margin: 0;
+            font-size: 1.25rem;
+            color: #6c757d;
+        }
+        #result-zone {
+            display: none; /* Скрыто по умолчанию */
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.75rem;
+            padding: 2rem;
+            word-wrap: break-word;
+        }
+        #result-zone h2 {
+            margin-top: 0;
+        }
+        #download-link {
+            font-family: 'monospace';
+            background-color: #e9ecef;
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            color: #0d6efd;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+        #copy-button {
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #copy-button:hover {
+            background-color: #0b5ed7;
+        }
+        .home-link {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            text-decoration: none;
+            color: #6c757d;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="home-link">&larr; На главную</a>
+    <div class="container">
+        <div id="drop-zone">
+            <input type="file" id="file-input" hidden/>
+            <p>Перетащите файл сюда или кликните для выбора</p>
+        </div>
+        <div id="result-zone">
+            <h2>Ваша одноразовая ссылка готова:</h2>
+            <a href="#" id="download-link" target="_blank"></a>
+            <br>
+            <button id="copy-button">Копировать ссылку</button>
+            <p style="font-size:0.9rem; color:#6c757d; margin-top: 1rem;">Ссылка сработает один раз и будет удалена через 15 минут.</p>
+        </div>
+    </div>
+    <script src="/static/drop_script.js"></script>
+</body>
+</html>

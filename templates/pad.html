@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pad - Lemma Tools</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400&family=Inter:wght@400;600&display=swap');
+        
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #f8f9fa;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+        #notepad {
+            font-family: 'Fira Code', monospace;
+            flex-grow: 1;
+            width: 100%;
+            padding: 2rem;
+            font-size: 1rem;
+            line-height: 1.7;
+            border: none;
+            outline: none;
+            resize: none;
+            background-color: #ffffff;
+            color: #212529;
+            box-sizing: border-box; /* Важно для правильных размеров */
+        }
+        .status-bar {
+            background-color: #343a40;
+            color: #dee2e6;
+            padding: 0.5rem 2rem;
+            font-size: 0.9rem;
+            font-family: 'Inter', sans-serif;
+            text-align: right;
+        }
+        .status-bar span {
+            opacity: 0.7;
+        }
+        .home-link {
+            position: fixed;
+            top: 15px;
+            left: 20px;
+            text-decoration: none;
+            background-color: rgba(0,0,0,0.1);
+            color: #000;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 5px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="home-link">&larr;</a>
+    
+    <textarea id="notepad" placeholder="Начните печатать... Этот текст мгновенно появится на всех устройствах, открывших эту же страницу."></textarea>
+    
+    <div class="status-bar">
+        <span>ID доски: {{ board_id }}</span>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const notepad = document.getElementById('notepad');
+            const boardId = "{{ board_id }}";
+            let socket;
+
+            function connect() {
+                // Определяем протокол для WebSocket (ws:// или wss://)
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProtocol}//${window.location.host}/ws/${boardId}`;
+                
+                socket = new WebSocket(wsUrl);
+
+                socket.onopen = function(event) {
+                    console.log("WebSocket connection established.");
+                };
+
+                socket.onmessage = function(event) {
+                    // Когда получаем сообщение от сервера, обновляем текст,
+                    // но только если он отличается от текущего, чтобы избежать "мерцания"
+                    if (notepad.value !== event.data) {
+                        notepad.value = event.data;
+                    }
+                };
+
+                socket.onclose = function(event) {
+                    console.log("WebSocket connection closed. Reconnecting...");
+                    // Пытаемся переподключиться через 2 секунды
+                    setTimeout(connect, 2000);
+                };
+
+                socket.onerror = function(error) {
+                    console.error("WebSocket Error: ", error);
+                };
+            }
+
+            // Устанавливаем соединение при загрузке страницы
+            connect();
+
+            let timeoutId;
+            notepad.addEventListener('input', () => {
+                // Используем debounce, чтобы не отправлять данные на каждый чих
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => {
+                    if (socket.readyState === WebSocket.OPEN) {
+                        socket.send(notepad.value);
+                    }
+                }, 150); // Отправляем через 150мс после прекращения ввода
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,44 +1,104 @@
-/* static/styles.css */
+/* Импортируем технологичный шрифт с Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+
+/* Основные стили */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Roboto Mono', monospace; /* Применяем новый шрифт */
     margin: 0;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
-
-    /* Градиент для фона: от глубокого фиолетового к почти черному */
-    background-color: #1a1a2e;
-    background-image: linear-gradient(180deg, #16213e 0%, #0f3460 50%, #1a1a2e 100%);
-    
-    /* Цвет текста по умолчанию */
-    color: #e3e3e3;
+    background-color: #0d0d0d; /* Очень темный фон */
+    color: #e0e0e0; /* Светло-серый текст */
+    overflow: hidden; /* Прячем все, что выходит за рамки */
 }
 
+/* Контейнер для контента */
 .container {
     text-align: center;
-    /* Полупрозрачный фон для контейнера, чтобы он выделялся */
-    background: rgba(26, 26, 46, 0.7);
-    padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    max-width: 450px;
+    background: rgba(18, 18, 18, 0.85);
+    padding: 40px 50px;
+    border-radius: 4px; /* Более резкие углы */
+    border: 1px solid #00ffff; /* Яркая неоновая рамка (циан) */
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3), 0 0 30px rgba(0, 255, 255, 0.2) inset; /* Эффект неонового свечения */
+    max-width: 500px;
     width: 90%;
 }
 
+/* Главный заголовок с неоновым эффектом */
 h1 {
-    font-size: 32px;
-    margin-bottom: 20px;
-    /* Яркий, неоновый цвет для заголовка */
-    color: #e94560; 
+    font-size: 42px;
+    margin-bottom: 15px;
+    color: #00ffff; /* Яркий циан */
+    text-transform: uppercase; /* Все буквы заглавные */
+    letter-spacing: 3px;
+    text-shadow: 0 0 5px #00ffff, 0 0 10px #00ffff, 0 0 20px #00aaff;
+}
+
+/* Ссылки-инструменты на главной */
+.tool-link {
+    display: block;
+    background-color: rgba(0, 255, 255, 0.1);
+    padding: 20px;
+    margin-top: 20px;
+    border-radius: 4px;
+    text-decoration: none;
+    color: #e0e0e0;
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.tool-link:hover {
+    background-color: rgba(0, 255, 255, 0.2);
+    transform: scale(1.03); /* Небольшое увеличение при наведении */
+}
+
+.tool-link h2 {
+    margin: 0 0 5px 0;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+/* Кнопки */
+button {
+    background-color: transparent;
+    color: #00ffff;
+    border: 1px solid #00ffff;
+    padding: 12px 20px;
+    border-radius: 4px;
+    font-size: 16px;
+    font-family: 'Roboto Mono', monospace;
+    cursor: pointer;
+    margin-top: 20px;
+    text-transform: uppercase;
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+button:hover {
+    background-color: rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
+}
+
+/* Прочие стили */
+p {
+    color: #a0a0a0;
 }
 
 a {
-    color: #537895;
-    transition: color 0.2s;
+    color: #00ffff;
+    text-decoration: none;
 }
 
-a:hover {
-    color: #e94560;
+textarea {
+    width: 100%;
+    height: 50vh;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    border: 1px solid #00ffff;
+    border-radius: 4px;
+    padding: 15px;
+    font-size: 16px;
+    font-family: 'Roboto Mono', monospace;
+    resize: vertical;
 }

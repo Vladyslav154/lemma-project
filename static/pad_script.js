@@ -1,13 +1,9 @@
-// static/pad_script.js
 document.addEventListener('DOMContentLoaded', () => {
     const editor = document.getElementById('editor');
     const status = document.getElementById('status');
 
     // --- БЛОК ГЕНЕРАЦИИ УНИКАЛЬНОГО URL ---
-    // Получаем ID доски из URL.
     let boardId = window.location.pathname.split('/')[2];
-
-    // Если ID в URL нет, создаем новый и обновляем адресную строку.
     if (!boardId || boardId.trim() === '') {
         boardId = Math.random().toString(36).substring(2, 12);
         window.history.replaceState({}, document.title, `/pad/${boardId}`);
@@ -20,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ws.onopen = () => {
         status.textContent = `Подключено к доске: ${boardId}`;
-        status.style.color = '#28a745';
     };
 
     ws.onmessage = (event) => {
@@ -30,8 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     ws.onclose = () => {
-        status.textContent = 'Соединение потеряно. Попробуйте обновить страницу.';
-        status.style.color = '#dc3545';
+        status.textContent = 'Соединение потеряно.';
     };
 
     function debounce(func, delay) {

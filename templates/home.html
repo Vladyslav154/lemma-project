@@ -3,88 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lemma Tools</title>
+    <title>Главная - Ваш Проект</title>
+    <link rel="stylesheet" href="/static/styles.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8f9fa;
-            color: #212529;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            text-align: center;
-        }
-        .container {
-            max-width: 800px;
-            padding: 2rem;
-        }
-        h1 {
-            font-size: 3.5rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-        p.subtitle {
-            font-size: 1.25rem;
-            color: #6c757d;
-            margin-bottom: 3rem;
-        }
-        .tools-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-        }
-        .tool-card {
-            background-color: #ffffff;
-            border: 1px solid #dee2e6;
-            border-radius: 0.75rem;
-            padding: 2rem;
+        /* Дополнительные стили только для этой страницы, если нужны */
+        .tool-link {
+            display: block;
+            background-color: rgba(15, 52, 96, 0.6);
+            padding: 20px;
+            margin-top: 20px;
+            border-radius: 8px;
             text-decoration: none;
-            color: inherit;
-            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-            cursor: pointer;
+            color: #e3e3e3;
+            transition: background-color 0.2s, transform 0.2s;
         }
-        .tool-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        .tool-link:hover {
+            background-color: rgba(233, 69, 96, 0.8);
+            transform: translateY(-3px);
         }
-        .tool-card h2 {
-            margin-top: 0;
-            font-size: 1.5rem;
+        .tool-link h2 {
+            margin: 0 0 5px 0;
+            color: #fff;
         }
-        .tool-card p {
-            color: #6c757d;
-            line-height: 1.6;
-        }
-        @media (max-width: 768px) {
-            .tools-grid {
-                grid-template-columns: 1fr;
-            }
-            h1 {
-                font-size: 2.5rem;
-            }
+        .tool-link p {
+            margin: 0;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
-    <div class="tools-grid">
-    <a href="/drop" class="tool-card">
-        <h2>Drop</h2>
-        <p>Безопасно передайте файл. Ссылка сработает один раз и исчезнет навсегда.</p>
-    </a>
-    <a href="/pad" class="tool-card">
-        <h2>Pad</h2>
-        <p>Общий блокнот для мгновенной синхронизации текста между вашими устройствами.</p>
-    </a>
+    <div class="container">
+        <h1>Ваш Проект</h1>
+        <p style="color: #a9a9a9;">Простые, приватные и надежные инструменты</p>
 
-    <a href="/qr" class="tool-card">
-        <h2>QR</h2>
-        <p>Создайте QR-код для ссылки или текста. Приватно и мгновенно.</p>
-    </a>
-    </div>
+        <a href="/drop" class="tool-link">
+            <h2>Drop 📁</h2>
+            <p>Отправить одноразовый файл</p>
+        </a>
+
+        <a href="/pad" class="tool-link">
+            <h2>Pad 📝</h2>
+            <p>Открыть общий блокнот</p>
+        </a>
     </div>
 </body>
 </html>

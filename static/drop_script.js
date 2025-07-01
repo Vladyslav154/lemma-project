@@ -1,82 +1,61 @@
+// static/drop_script.js
 document.addEventListener('DOMContentLoaded', () => {
-    const dropZone = document.getElementById('drop-zone');
+    const uploadArea = document.getElementById('upload-area');
     const fileInput = document.getElementById('file-input');
-    const resultZone = document.getElementById('result-zone');
-    const downloadLink = document.getElementById('download-link');
-    const copyButton = document.getElementById('copy-button');
-    const dropZoneText = dropZone.querySelector('p');
+    const fileNameDisplay = document.getElementById('file-name');
+    const uploadButton = document.getElementById('upload-button');
+    const linkArea = document.getElementById('link-area');
+    const fileLink = document.getElementById('file-link');
 
-    // Открываем диалог выбора файла по клику на зону
-    dropZone.addEventListener('click', () => {
-        fileInput.click();
-    });
+    // Открыть выбор файла по клику на область
+    uploadArea.addEventListener('click', () => fileInput.click());
 
+    // Обработка выбора файла
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
-            handleFileUpload(fileInput.files[0]);
+            const file = fileInput.files[0];
+            fileNameDisplay.textContent = `Выбран файл: ${file.name}`;
+            uploadButton.style.display = 'block'; // Показать кнопку
         }
     });
 
-    // Обработка перетаскивания файла
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-    });
-
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('dragover');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFileUpload(files[0]);
+    // Обработка загрузки по клику на кнопку
+    uploadButton.addEventListener('click', async () => {
+        if (fileInput.files.length === 0) {
+            alert('Пожалуйста, выберите файл для загрузки.');
+            return;
         }
-    });
 
-    // Главная функция загрузки файла
-    async function handleFileUpload(file) {
-        dropZoneText.textContent = 'Загрузка...';
+        const file = fileInput.files[0];
         const formData = new FormData();
         formData.append('file', file);
 
         try {
+            uploadButton.textContent = 'Загрузка...';
+            uploadButton.disabled = true;
+
             const response = await fetch('/upload', {
                 method: 'POST',
-                body: formData
+                body: formData,
             });
 
             if (!response.ok) {
-                throw new Error('Ошибка при загрузке файла.');
+                throw new Error('Ошибка при загрузке файла. Попробуйте снова.');
             }
 
             const result = await response.json();
-            showResult(result.download_link);
+            const link = `${window.location.origin}/file/${result.file_id}`;
+            
+            fileLink.href = link;
+            fileLink.textContent = link;
+            linkArea.style.display = 'block'; // Показать область со ссылкой
 
         } catch (error) {
-            console.error(error);
-            dropZoneText.textContent = 'Произошла ошибка. Попробуйте снова.';
+            console.error('Ошибка:', error);
+            alert(error.message);
+        } finally {
+            uploadButton.textContent = 'Получить ссылку';
+            uploadButton.disabled = false;
         }
-    }
-
-    // Показываем результат
-    function showResult(link) {
-        const fullLink = `${window.location.origin}${link}`;
-        dropZone.style.display = 'none';
-        resultZone.style.display = 'block';
-        downloadLink.href = fullLink;
-        downloadLink.textContent = fullLink;
-    }
-    
-    // Копирование ссылки в буфер обмена
-    copyButton.addEventListener('click', () => {
-        navigator.clipboard.writeText(downloadLink.href).then(() => {
-            copyButton.textContent = 'Скопировано!';
-            setTimeout(() => {
-                copyButton.textContent = 'Копировать ссылку';
-            }, 2000);
-        });
     });
 });

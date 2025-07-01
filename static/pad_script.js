@@ -2,13 +2,17 @@
 document.addEventListener('DOMContentLoaded', () => {
     const editor = document.getElementById('editor');
     const status = document.getElementById('status');
-    
-    // Получаем ID доски из URL, если его нет - создаем новый
+
+    // --- БЛОК ГЕНЕРАЦИИ УНИКАЛЬНОГО URL ---
+    // Получаем ID доски из URL.
     let boardId = window.location.pathname.split('/')[2];
-    if (!boardId) {
-        boardId = Math.random().toString(36).substring(2, 15);
+
+    // Если ID в URL нет, создаем новый и обновляем адресную строку.
+    if (!boardId || boardId.trim() === '') {
+        boardId = Math.random().toString(36).substring(2, 12);
         window.history.replaceState({}, document.title, `/pad/${boardId}`);
     }
+    // --- КОНЕЦ БЛОКА ---
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/${boardId}`;
@@ -20,7 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     ws.onmessage = (event) => {
-        // Обновляем текст только если он отличается, чтобы не сбивать курсор
         if (editor.value !== event.data) {
             editor.value = event.data;
         }
@@ -31,12 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
         status.style.color = '#dc3545';
     };
 
-    ws.onerror = () => {
-        status.textContent = 'Ошибка соединения.';
-        status.style.color = '#dc3545';
-    };
-
-    // Функция Debounce: выполняет другую функцию только после паузы
     function debounce(func, delay) {
         let timeout;
         return function(...args) {
@@ -45,14 +42,12 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // Создаем "умную" функцию отправки с задержкой в 300мс
     const debouncedSend = debounce((text) => {
         if (ws.readyState === WebSocket.OPEN) {
             ws.send(text);
         }
     }, 300);
 
-    // Слушаем ввод текста и вызываем "умную" функцию
     editor.addEventListener('input', () => {
         debouncedSend(editor.value);
     });

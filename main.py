@@ -6,22 +6,23 @@ from pathlib import Path
 import aiofiles
 import redis
 from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse, BackgroundTask # Убедитесь, что BackgroundTask здесь
+from fastapi.responses import FileResponse, HTMLResponse, BackgroundTask
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-# --- Настройка ---
 app = FastAPI()
-r = redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"), decode_responses=True)
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+r = redis.from_url(REDIS_URL, decode_responses=True)
+
 UPLOAD_DIR = Path("temp_uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
+
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# --- Хранилище для чат-комнат ---
 board_connections = {}
 
-# --- Маршруты для страниц (HTML) ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse("home.html", {"request": request})
@@ -34,16 +35,14 @@ async def read_drop(request: Request):
 async def read_pad_board(request: Request, board_id: str):
     return templates.TemplateResponse("pad.html", {"request": request, "board_id": board_id})
 
-# --- API для "Drop" ---
 @app.post("/upload")
 async def upload_file(file: UploadFile):
     file_id = str(uuid.uuid4())
     file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
 
-    # Стриминг файла на диск по частям для экономии памяти
     try:
         async with aiofiles.open(file_path, "wb") as f:
-            while content := await file.read(1024 * 1024):  # Читаем по 1MB
+            while content := await file.read(1024 * 1024):
                 await f.write(content)
     except Exception:
         return {"error": "Failed to save file on server."}, 500
@@ -65,11 +64,9 @@ async def get_file(file_id: str):
 
     r.delete(f"lepko:drop:{file_id}")
 
-    # Правильное удаление файла в фоновом режиме
     task = BackgroundTask(os.remove, file_path)
     return FileResponse(path=file_path, filename=file_path.name, background=task)
 
-# --- API для "Pad" ---
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
     await websocket.accept()

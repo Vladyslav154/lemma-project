@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-# ИСПРАВЛЕННЫЕ ИМПОРТЫ:
+# Импортируем наши модули для работы с базой данных
 import models
 import hashing
 from database import engine, SessionLocal
@@ -22,6 +22,7 @@ from database import engine, SessionLocal
 app = FastAPI()
 models.Base.metadata.create_all(bind=engine)
 
+# Функция для получения сессии базы данных
 def get_db():
     db = SessionLocal()
     try:
@@ -29,14 +30,17 @@ def get_db():
     finally:
         db.close()
 
+# Подключение к Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
+# Остальные настройки
 UPLOAD_DIR = Path("temp_uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 board_connections = {}
+
 
 # --- Маршруты для страниц (HTML) ---
 @app.get("/", response_class=HTMLResponse)
@@ -50,6 +54,11 @@ async def read_drop(request: Request):
 @app.get("/pad/{board_id:path}", response_class=HTMLResponse)
 async def read_pad_board(request: Request, board_id: str):
     return templates.TemplateResponse("pad.html", {"request": request, "board_id": board_id})
+
+@app.get("/upgrade", response_class=HTMLResponse)
+async def read_upgrade(request: Request):
+    return templates.TemplateResponse("upgrade.html", {"request": request})
+
 
 # --- API для "Drop" ---
 @app.post("/upload")
@@ -78,7 +87,8 @@ async def get_file(file_id: str):
     tasks.add_task(os.remove, file_path)
     return FileResponse(path=file_path, filename=file_path.name, background=tasks)
 
-# --- API для "Pad" ---
+
+# --- API для "Pad" (анонимный чат) ---
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
     await websocket.accept()
@@ -93,17 +103,21 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
     except WebSocketDisconnect:
         board_connections[board_id].remove(websocket)
 
+
 # --- API для генерации ключей доступа ---
 @app.post('/keys/generate', status_code=status.HTTP_201_CREATED)
 def generate_key(plan_type: str, db: Session = Depends(get_db)):
     if plan_type not in ["monthly", "yearly"]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип плана. Используйте 'monthly' или 'yearly'.")
+    
     new_key_string = f"LEPKO-{plan_type.upper()}-{str(uuid.uuid4()).upper()}"
+    
     now = datetime.datetime.utcnow()
     if plan_type == "monthly":
         expires = now + datetime.timedelta(days=30)
     else: # yearly
         expires = now + datetime.timedelta(days=365)
+
     new_key = models.AccessKey(
         key_string=new_key_string,
         expires_at=expires,
@@ -112,4 +126,5 @@ def generate_key(plan_type: str, db: Session = Depends(get_db)):
     db.add(new_key)
     db.commit()
     db.refresh(new_key)
+    
     return {"access_key": new_key_string, "expires_at": expires.isoformat()}

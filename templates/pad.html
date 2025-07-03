@@ -9,12 +9,12 @@
 </head>
 <body>
     <div class="container">
-        <div class="lang-switcher" style="text-align: right; margin-bottom: 10px;">
+        <div class="lang-switcher">
             <button onclick="setLanguage('ru')">RU</button>
             <button onclick="setLanguage('en')">EN</button>
         </div>
         <h1 data-i18n-key="pad_page_title"></h1>
-        <div id="password-overlay" style="text-align: center;">
+        <div id="password-overlay">
             <h2 data-i18n-key="pad_password_title"></h2>
             <p data-i18n-key="pad_password_subtitle"></p>
             <form id="password-form">
@@ -22,10 +22,17 @@
                 <button type="submit" data-i18n-key="pad_enter_button"></button>
             </form>
         </div>
-        <div id="chat-wrapper" style="display: none; flex-grow: 1; flex-direction: column;">
+        <div id="chat-wrapper">
             <div id="messages"></div>
             <form id="form" action="">
                 <input type="text" id="message-input" data-i18n-key-placeholder="pad_message_placeholder" autocomplete="off"/>
+                <div id="premium-options" style="display: none;">
+                    <select id="ttl-select">
+                        <option value="0">Навсегда</option>
+                        <option value="10">10 сек</option>
+                        <option value="60">1 мин</option>
+                    </select>
+                </div>
                 <button data-i18n-key="pad_send_button"></button>
             </form>
             <div id="status"></div>

@@ -2,18 +2,18 @@ import asyncio
 import os
 import uuid
 import datetime
-import html  # <-- Импорт для экранирования HTML
+import html
 from pathlib import Path
 
 import aiofiles
 import redis
-from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, status, Depends
+# Добавляем Form для правильной обработки данных из JavaScript
+from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, status, Depends, Form
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-# --- Импорты для ограничения запросов (Rate Limiter) ---
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -24,21 +24,17 @@ app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Подключаемся к Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
-# Остальные настройки
 UPLOAD_DIR = Path("temp_uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 board_connections = {}
 
-# --- Настройки безопасности ---
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
+MAX_FILE_SIZE = 100 * 1024 * 1024
 ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain"]
-
 
 # --- Маршруты для страниц (HTML) ---
 @app.get("/", response_class=HTMLResponse)
@@ -57,19 +53,14 @@ async def read_pad_board(request: Request, board_id: str):
 async def read_upgrade(request: Request):
     return templates.TemplateResponse("upgrade.html", {"request": request})
 
-
-# --- API для "Drop" с проверками безопасности ---
+# --- API для "Drop" ---
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile):
-    # Проверка размера файла
     if file.size > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="Файл слишком большой. Максимальный размер: 100 МБ.")
-
-    # Проверка типа файла
     is_allowed = any(file.content_type.startswith(allowed_type) for allowed_type in ALLOWED_FILE_TYPES)
     if not is_allowed:
         raise HTTPException(status_code=400, detail="Недопустимый тип файла.")
-
     file_id = str(uuid.uuid4())
     file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
     try:
@@ -94,8 +85,7 @@ async def get_file(file_id: str):
     tasks.add_task(os.remove, file_path)
     return FileResponse(path=file_path, filename=file_path.name, background=tasks)
 
-
-# --- API для "Pad" с экранированием HTML ---
+# --- API для "Pad" ---
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
     await websocket.accept()
@@ -105,18 +95,17 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
     try:
         while True:
             data = await websocket.receive_text()
-            # Экранируем HTML-символы для защиты от XSS
             sanitized_data = html.escape(data)
             for connection in board_connections[board_id]:
                 await connection.send_text(sanitized_data)
     except WebSocketDisconnect:
         board_connections[board_id].remove(websocket)
 
-
-# --- API для генерации ключей с ограничением частоты запросов ---
+# --- API для генерации ключей ---
 @app.post('/keys/generate', status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/minute")  # Не более 5 запросов в минуту с одного IP
-def generate_key(request: Request, plan_type: str):
+@limiter.limit("5/minute")
+# ИЗМЕНЕНИЕ ЗДЕСЬ: Используем Form() для получения plan_type
+def generate_key(request: Request, plan_type: str = Form(...)):
     if plan_type not in ["monthly", "yearly"]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип плана.")
     
@@ -125,7 +114,7 @@ def generate_key(request: Request, plan_type: str):
     now = datetime.datetime.utcnow()
     if plan_type == "monthly":
         expires_in_seconds = 30 * 24 * 60 * 60
-    else: # yearly
+    else:
         expires_in_seconds = 365 * 24 * 60 * 60
 
     r.set(f"lepko:key:{new_key_string}", plan_type, ex=expires_in_seconds)

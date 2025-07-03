@@ -5,5 +5,17 @@
   "drop_subtitle": "Send a disposable file",
   "pad_title": "Pad 📝",
   "pad_subtitle": "Open a shared notepad",
-  "upgrade_link": "Upgrade to Premium 🚀"
+  "upgrade_link": "Upgrade to Premium 🚀",
+  "activate_link": "Activate Key",
+  "upgrade_page_title": "Premium Access",
+  "upgrade_page_subtitle": "Get an anonymous access key for premium features.",
+  "monthly_plan": "1 Month",
+  "yearly_plan": "1 Year",
+  "yearly_plan_promo": "Save 35%",
+  "get_key_button": "Get Key",
+  "your_new_key": "Your new access key. Save it!",
+  "we_cant_recover": "We cannot recover it if you lose it.",
+  "activate_page_title": "Key Activation",
+  "activate_page_subtitle": "Paste your access key to activate premium features.",
+  "activate_button": "Activate"
 }

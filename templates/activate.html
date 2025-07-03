@@ -8,15 +8,15 @@
 </head>
 <body>
     <div class="container">
-        <h1>Активация ключа</h1>
-        <p>Вставьте ваш ключ доступа для активации премиум-функций.</p>
+        <h1 data-i18n-key="activate_page_title">Активация ключа</h1>
+        <p data-i18n-key="activate_page_subtitle">Вставьте ваш ключ доступа для активации премиум-функций.</p>
         <form id="activation-form">
             <input type="text" id="key-input" placeholder="LEPKO-..." autocomplete="off"/>
-            <button type="submit">Активировать</button>
+            <button type="submit" data-i18n-key="activate_button">Активировать</button>
         </form>
         <div id="activation-status" style="margin-top: 20px;"></div>
         <a href="/" class="home-link">Вернуться на главную</a>
     </div>
     <script src="/static/activate.js"></script>
-</body>
+    <script src="/static/i18n.js"></script> </body>
 </html>

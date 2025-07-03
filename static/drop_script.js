@@ -7,10 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileLink = document.getElementById('file-link');
     const qrcodeContainer = document.getElementById('qrcode');
 
-    // Открыть выбор файла по клику на область
     uploadArea.addEventListener('click', () => fileInput.click());
 
-    // Обработка выбора файла
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) {
             const file = fileInput.files[0];
@@ -19,13 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Обработка загрузки по клику на кнопку
     uploadButton.addEventListener('click', async () => {
         if (fileInput.files.length === 0) {
             alert('Пожалуйста, выберите файл для загрузки.');
             return;
         }
-
         const file = fileInput.files[0];
         const formData = new FormData();
         formData.append('file', file);
@@ -34,31 +30,40 @@ document.addEventListener('DOMContentLoaded', () => {
             uploadButton.textContent = 'Загрузка...';
             uploadButton.disabled = true;
 
+            // --- ИЗМЕНЕНИЕ ЗДЕСЬ: Добавляем ключ в заголовки запроса ---
+            const headers = {};
+            const accessKey = localStorage.getItem('lepko_access_key');
+            if (accessKey) {
+                headers['Authorization'] = `Bearer ${accessKey}`;
+            }
+
             const response = await fetch('/upload', {
                 method: 'POST',
                 body: formData,
+                headers: headers // <-- Передаем заголовки
             });
+            // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
+            // Если пришла ошибка, показываем ее текст
             if (!response.ok) {
-                throw new Error('Ошибка при загрузке файла. Попробуйте снова.');
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Ошибка при загрузке файла.');
             }
 
             const result = await response.json();
             const link = `${window.location.origin}/file/${result.file_id}`;
             
-            // Показываем ссылку
             fileLink.href = link;
             fileLink.textContent = link;
-            linkArea.style.display = 'block';
-
-            // --- НОВЫЙ БЛОК: ГЕНЕРАЦИЯ QR-КОДА ---
-            qrcodeContainer.innerHTML = ""; // Очищаем старый QR-код
+            
+            qrcodeContainer.innerHTML = "";
             new QRCode(qrcodeContainer, {
                 text: link,
                 width: 128,
                 height: 128,
             });
-            // --- КОНЕЦ НОВОГО БЛОКА ---
+
+            linkArea.style.display = 'block';
 
         } catch (error) {
             console.error('Ошибка:', error);

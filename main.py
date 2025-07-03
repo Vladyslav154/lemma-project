@@ -1,12 +1,20 @@
-# ... (все импорты остаются прежними) ...
-import asyncio, os, uuid, datetime, html
+import asyncio
+import os
+import uuid
+import datetime
+import html
 from pathlib import Path
-import aiofiles, redis
-from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, status, Depends, Form
+from typing import Optional # <-- Добавляем новый импорт
+
+import aiofiles
+import redis
+# Добавляем Header для получения ключа из заголовков
+from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, status, Depends, Form, Header 
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -23,40 +31,47 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 board_connections = {}
-MAX_FILE_SIZE = 100 * 1024 * 1024
+
+# --- Настройки безопасности и лимитов ---
+STANDARD_MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
+PREMIUM_MAX_FILE_SIZE = 1024 * 1024 * 1024 # 1 GB
 ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain"]
 
 # --- Маршруты для страниц (HTML) ---
+# ... (остаются без изменений) ...
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    return templates.TemplateResponse("home.html", {"request": request})
-
+async def read_root(request: Request): return templates.TemplateResponse("home.html", {"request": request})
 @app.get("/drop", response_class=HTMLResponse)
-async def read_drop(request: Request):
-    return templates.TemplateResponse("drop.html", {"request": request})
-
+async def read_drop(request: Request): return templates.TemplateResponse("drop.html", {"request": request})
 @app.get("/pad/{board_id:path}", response_class=HTMLResponse)
-async def read_pad_board(request: Request, board_id: str):
-    return templates.TemplateResponse("pad.html", {"request": request, "board_id": board_id})
-
+async def read_pad_board(request: Request, board_id: str): return templates.TemplateResponse("pad.html", {"request": request, "board_id": board_id})
 @app.get("/upgrade", response_class=HTMLResponse)
-async def read_upgrade(request: Request):
-    return templates.TemplateResponse("upgrade.html", {"request": request})
-
+async def read_upgrade(request: Request): return templates.TemplateResponse("upgrade.html", {"request": request})
 @app.get("/activate", response_class=HTMLResponse)
-async def read_activate(request: Request):
-    return templates.TemplateResponse("activate.html", {"request": request})
+async def read_activate(request: Request): return templates.TemplateResponse("activate.html", {"request": request})
 
-# --- API ---
-# ... (весь код для /upload, /file/{file_id}, /ws/{board_id}, /keys/generate остается без изменений) ...
-
+# --- API для "Drop" с проверкой премиум-ключа ---
 @app.post("/upload")
-async def upload_file(request: Request, file: UploadFile):
-    if file.size > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="Файл слишком большой. Максимальный размер: 100 МБ.")
+async def upload_file(request: Request, file: UploadFile, authorization: Optional[str] = Header(None)):
+    
+    # Проверяем, есть ли у пользователя активный премиум-ключ
+    is_premium = False
+    if authorization and authorization.startswith("Bearer "):
+        key = authorization.split("Bearer ")[1]
+        if r.get(f"lepko:key:{key}"):
+            is_premium = True
+
+    # Устанавливаем лимит размера файла в зависимости от статуса
+    max_size = PREMIUM_MAX_FILE_SIZE if is_premium else STANDARD_MAX_FILE_SIZE
+    
+    if file.size > max_size:
+        limit_mb = int(max_size / 1024 / 1024)
+        raise HTTPException(status_code=413, detail=f"Файл слишком большой. Ваш лимит: {limit_mb} МБ.")
+
     is_allowed = any(file.content_type.startswith(allowed_type) for allowed_type in ALLOWED_FILE_TYPES)
     if not is_allowed:
         raise HTTPException(status_code=400, detail="Недопустимый тип файла.")
+        
     file_id = str(uuid.uuid4())
     file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
     try:
@@ -68,14 +83,14 @@ async def upload_file(request: Request, file: UploadFile):
     r.set(f"lepko:drop:{file_id}", str(file_path), ex=3600)
     return {"file_id": file_id}
 
+# --- Остальные API (get_file, websocket_endpoint, generate_key, check_key) ---
+# ... (остаются без изменений) ...
 @app.get("/file/{file_id}")
 async def get_file(file_id: str):
     file_path_str = r.get(f"lepko:drop:{file_id}")
-    if not file_path_str:
-        return HTMLResponse(content="<h1>Файл не найден или срок его действия истек.</h1>", status_code=404)
+    if not file_path_str: return HTMLResponse(content="<h1>Файл не найден или срок его действия истек.</h1>", status_code=404)
     file_path = Path(file_path_str)
-    if not file_path.exists():
-        return HTMLResponse(content="<h1>Ошибка: Файл не найден на диске сервера.</h1>", status_code=404)
+    if not file_path.exists(): return HTMLResponse(content="<h1>Ошибка: Файл не найден на диске сервера.</h1>", status_code=404)
     r.delete(f"lepko:drop:{file_id}")
     tasks = BackgroundTasks()
     tasks.add_task(os.remove, file_path)
@@ -84,23 +99,20 @@ async def get_file(file_id: str):
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
     await websocket.accept()
-    if board_id not in board_connections:
-        board_connections[board_id] = []
+    if board_id not in board_connections: board_connections[board_id] = []
     board_connections[board_id].append(websocket)
     try:
         while True:
             data = await websocket.receive_text()
             sanitized_data = html.escape(data)
-            for connection in board_connections[board_id]:
-                await connection.send_text(sanitized_data)
+            for connection in board_connections[board_id]: await connection.send_text(sanitized_data)
     except WebSocketDisconnect:
         board_connections[board_id].remove(websocket)
 
 @app.post('/keys/generate', status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def generate_key(request: Request, plan_type: str = Form(...)):
-    if plan_type not in ["monthly", "yearly"]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип плана.")
+    if plan_type not in ["monthly", "yearly"]: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип плана.")
     new_key_string = f"LEPKO-{plan_type.upper()}-{str(uuid.uuid4()).upper()}"
     now = datetime.datetime.utcnow()
     expires_in_seconds = 30*24*60*60 if plan_type == "monthly" else 365*24*60*60
@@ -108,11 +120,8 @@ def generate_key(request: Request, plan_type: str = Form(...)):
     expires_at = now + datetime.timedelta(seconds=expires_in_seconds)
     return {"access_key": new_key_string, "expires_at": expires_at.isoformat()}
 
-# --- НОВЫЙ API для проверки ключа ---
 @app.get("/keys/check/{key_string}")
 def check_key(key_string: str):
     plan_type = r.get(f"lepko:key:{key_string}")
-    if not plan_type:
-        raise HTTPException(status_code=404, detail="Ключ не найден или истек.")
+    if not plan_type: raise HTTPException(status_code=404, detail="Ключ не найден или истек.")
     return {"status": "active", "plan": plan_type}
-

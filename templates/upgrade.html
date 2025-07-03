@@ -5,35 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upgrade - Lepko</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <style>
-        .plan { border: 1px solid rgba(0, 255, 255, 0.3); padding: 20px; margin-bottom: 20px; border-radius: 4px; }
-        #key-display { margin-top: 30px; padding: 20px; background-color: #1a1a1a; border: 1px solid #00ffff; border-radius: 4px; display: none; }
-        #access-key { font-size: 14px; color: #00ffff; word-wrap: break-word; }
-    </style>
 </head>
 <body>
     <div class="container">
-        <h1 data-i18n-key="upgrade_page_title">Премиум-доступ</h1>
-        <p data-i18n-key="upgrade_page_subtitle">Получите анонимный ключ доступа для премиум-функций.</p>
-        
+        <div class="lang-switcher" style="text-align: right; margin-bottom: 10px;">
+            <button onclick="setLanguage('ru')">RU</button>
+            <button onclick="setLanguage('en')">EN</button>
+        </div>
+        <h1 data-i18n-key="upgrade_page_title"></h1>
+        <p data-i18n-key="upgrade_page_subtitle"></p>
         <div class="plan">
-            <h2 data-i18n-key="monthly_plan">1 Месяц</h2>
+            <h2 data-i18n-key="monthly_plan"></h2>
             <p>$14</p>
-            <button id="monthly-btn" data-i18n-key="get_key_button">Получить ключ</button>
+            <button id="monthly-btn" data-i18n-key="get_key_button"></button>
         </div>
-
         <div class="plan">
-            <h2 data-i18n-key="yearly_plan">1 Год</h2>
-            <p>$110 (<span data-i18n-key="yearly_plan_promo">Экономия 35%</span>)</p>
-            <button id="yearly-btn" data-i18n-key="get_key_button">Получить ключ</button>
+            <h2 data-i18n-key="yearly_plan"></h2>
+            <p>$110 (<span data-i18n-key="yearly_plan_promo"></span>)</p>
+            <button id="yearly-btn" data-i18n-key="get_key_button"></button>
         </div>
-
         <div id="key-display">
-            <h4 data-i18n-key="your_new_key">Ваш новый ключ доступа. Сохраните его!</h4>
-            <p data-i18n-key="we_cant_recover">Мы не сможем его восстановить.</p>
+            <h4 data-i18n-key="your_new_key"></h4>
+            <p data-i18n-key="we_cant_recover"></p>
             <code id="access-key"></code>
         </div>
-        
         <a href="/" class="home-link">Вернуться на главную</a>
     </div>
     <script src="/static/upgrade.js"></script>

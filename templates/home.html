@@ -3,14 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lepko - Простые приватные инструменты</title>
+    <title>Lepko</title>
     <link rel="stylesheet" href="/static/styles.css">
-    <style>
-        .lang-switcher { margin-bottom: 20px; }
-        .lang-switcher button { cursor: pointer; background: none; border: 1px solid #fff; color: #fff; margin: 0 5px; padding: 5px 10px; }
-        .lang-switcher button:hover { background: #fff; color: #000; }
-        .upgrade-link, .activate-link { margin-top: 20px; display: inline-block; margin-left: 15px; }
-    </style>
 </head>
 <body>
     <div class="container home-container">
@@ -18,16 +12,15 @@
             <button onclick="setLanguage('ru')">RU</button>
             <button onclick="setLanguage('en')">EN</button>
         </div>
-
         <div class="brand-block">
-            <h1 data-i18n-key="title">Lepko</h1>
-            <p data-i18n-key="subtitle">Простые, приватные и надежные инструменты.</p>
-            <a href="/upgrade" class="upgrade-link" data-i18n-key="upgrade_link">Upgrade to Premium 🚀</a>
-            <a href="/activate" class="activate-link" data-i18n-key="activate_link">Активировать ключ</a>
+            <h1 data-i18n-key="title"></h1>
+            <p data-i18n-key="subtitle"></p>
+            <a href="/upgrade" class="upgrade-link" data-i18n-key="upgrade_link"></a>
+            <a href="/activate" class="activate-link" data-i18n-key="activate_link"></a>
         </div>
         <div class="tools-block">
-            <a href="/drop" class="tool-link"><h2 data-i18n-key="drop_title">Drop 📁</h2><p data-i18n-key="drop_subtitle">Отправить одноразовый файл</p></a>
-            <a href="/pad" class="tool-link"><h2 data-i18n-key="pad_title">Pad 📝</h2><p data-i18n-key="pad_subtitle">Открыть общий блокнот</p></a>
+            <a href="/drop" class="tool-link"><h2 data-i18n-key="drop_title"></h2><p data-i18n-key="drop_subtitle"></p></a>
+            <a href="/pad" class="tool-link"><h2 data-i18n-key="pad_title"></h2><p data-i18n-key="pad_subtitle"></p></a>
         </div>
     </div>
     <script src="/static/i18n.js"></script>

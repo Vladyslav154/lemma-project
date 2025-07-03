@@ -14,8 +14,5 @@
   "yearly_plan_promo": "Save 35%",
   "get_key_button": "Get Key",
   "your_new_key": "Your new access key. Save it!",
-  "we_cant_recover": "We cannot recover it if you lose it.",
-  "activate_page_title": "Key Activation",
-  "activate_page_subtitle": "Paste your access key to activate premium features.",
-  "activate_button": "Activate"
+  "we_cant_recover": "We cannot recover it if you lose it."
 }

@@ -10,8 +10,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('message-input');
 
     let ws;
+    let encryptionKey = ''; // Здесь будет храниться ключ шифрования
 
-    // Шаг 1: Обработка ввода пароля
+    // --- Функции шифрования ---
+    function encryptMessage(message, key) {
+        return CryptoJS.AES.encrypt(message, key).toString();
+    }
+
+    function decryptMessage(encryptedMessage, key) {
+        const bytes = CryptoJS.AES.decrypt(encryptedMessage, key);
+        return bytes.toString(CryptoJS.enc.Utf8);
+    }
+
+    // --- Логика приложения ---
     passwordForm.addEventListener('submit', (event) => {
         event.preventDefault();
         const password = passwordInput.value;
@@ -19,19 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Пожалуйста, введите пароль.');
             return;
         }
-
-        // В будущем здесь будет генерация ключа шифрования из пароля.
-        // const encryptionKey = await generateKeyFromPassword(password);
-
-        // Скрываем окно пароля и показываем чат
+        encryptionKey = password; // Используем пароль как ключ шифрования
         passwordOverlay.style.display = 'none';
         chatWrapper.style.display = 'flex';
-        
-        // Шаг 2: Инициализация WebSocket ПОСЛЕ ввода пароля
         initializeWebSocket();
     });
 
-    // Шаг 3: Функция инициализации чата
     function initializeWebSocket() {
         let boardId = window.location.pathname.split('/pad/')[1];
         if (!boardId || boardId.trim() === '') {
@@ -44,16 +48,21 @@ document.addEventListener('DOMContentLoaded', () => {
         ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-            status.textContent = `Вы в анонимной комнате: ${boardId}`;
+            status.textContent = `Вы в защищенной комнате: ${boardId}`;
         };
 
         ws.onmessage = (event) => {
-            // В будущем здесь будет дешифровка сообщения
-            // const decryptedMessage = await decryptMessage(event.data, encryptionKey);
-            const messageDiv = document.createElement('div');
-            messageDiv.textContent = event.data; // Пока показываем как есть
-            messages.appendChild(messageDiv);
-            messages.scrollTop = messages.scrollHeight;
+            try {
+                const decryptedMessage = decryptMessage(event.data, encryptionKey);
+                if (decryptedMessage) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.textContent = decryptedMessage;
+                    messages.appendChild(messageDiv);
+                    messages.scrollTop = messages.scrollHeight;
+                }
+            } catch (e) {
+                console.error("Failed to decrypt message. Wrong password?", e);
+            }
         };
 
         ws.onclose = () => {
@@ -63,9 +72,8 @@ document.addEventListener('DOMContentLoaded', () => {
         form.addEventListener('submit', (event) => {
             event.preventDefault();
             if (input.value && ws && ws.readyState === WebSocket.OPEN) {
-                // В будущем здесь будет шифрование сообщения
-                // const encryptedMessage = await encryptMessage(input.value, encryptionKey);
-                ws.send(input.value); // Пока отправляем как есть
+                const encryptedMessage = encryptMessage(input.value, encryptionKey);
+                ws.send(encryptedMessage);
                 input.value = '';
             }
         });

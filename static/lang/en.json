@@ -18,15 +18,8 @@
   "activate_page_title": "Key Activation",
   "activate_page_subtitle": "Paste your access key to activate premium features.",
   "activate_button": "Activate",
-  "drop_page_title": "Drop 📁",
-  "drop_drag_text": "Drag & drop a file here or click to select",
-  "drop_get_link_button": "Get Link",
-  "drop_your_link": "Your disposable link:",
-  "pad_page_title": "Pad 📝",
-  "pad_password_title": "Secure Room",
-  "pad_password_subtitle": "Enter a shared password for encryption.",
-  "pad_password_placeholder": "Room password...",
-  "pad_enter_button": "Enter",
-  "pad_message_placeholder": "Write a message...",
-  "pad_send_button": "Send"
+  "premium_feature_1": "File size limit up to 1 GB",
+  "premium_feature_2": "Self-destructing messages in chat",
+  "premium_feature_3": "Early access to new features ('Whisper' voice chat)",
+  "premium_feature_4": "Priority support"
 }

@@ -1,4 +1,3 @@
-// static/drop_script.js
 document.addEventListener('DOMContentLoaded', () => {
     const uploadArea = document.getElementById('upload-area');
     const fileInput = document.getElementById('file-input');
@@ -6,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const uploadButton = document.getElementById('upload-button');
     const linkArea = document.getElementById('link-area');
     const fileLink = document.getElementById('file-link');
+    const qrcodeContainer = document.getElementById('qrcode');
 
     // Открыть выбор файла по клику на область
     uploadArea.addEventListener('click', () => fileInput.click());
@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (fileInput.files.length > 0) {
             const file = fileInput.files[0];
             fileNameDisplay.textContent = `Выбран файл: ${file.name}`;
-            uploadButton.style.display = 'block'; // Показать кнопку
+            uploadButton.style.display = 'block';
         }
     });
 
@@ -46,9 +46,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
             const link = `${window.location.origin}/file/${result.file_id}`;
             
+            // Показываем ссылку
             fileLink.href = link;
             fileLink.textContent = link;
-            linkArea.style.display = 'block'; // Показать область со ссылкой
+            linkArea.style.display = 'block';
+
+            // --- НОВЫЙ БЛОК: ГЕНЕРАЦИЯ QR-КОДА ---
+            qrcodeContainer.innerHTML = ""; // Очищаем старый QR-код
+            new QRCode(qrcodeContainer, {
+                text: link,
+                width: 128,
+                height: 128,
+            });
+            // --- КОНЕЦ НОВОГО БЛОКА ---
 
         } catch (error) {
             console.error('Ошибка:', error);

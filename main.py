@@ -1,5 +1,7 @@
+import asyncio
 import os
 import uuid
+from pathlib import Path  # <--- ЭТА СТРОКА БЫЛА ПРОПУЩЕНА
 import datetime
 
 import aiofiles
@@ -71,7 +73,7 @@ async def get_file(file_id: str):
     return FileResponse(path=file_path, filename=file_path.name, background=tasks)
 
 
-# --- API для "Pad" ---
+# --- API для "Pad" (анонимный чат) ---
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
     await websocket.accept()
@@ -87,7 +89,7 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
         board_connections[board_id].remove(websocket)
 
 
-# --- API для генерации ключей доступа (теперь работает с Redis) ---
+# --- API для генерации ключей доступа (работает с Redis) ---
 @app.post('/keys/generate', status_code=status.HTTP_201_CREATED)
 def generate_key(plan_type: str):
     if plan_type not in ["monthly", "yearly"]:
@@ -97,13 +99,10 @@ def generate_key(plan_type: str):
     
     now = datetime.datetime.utcnow()
     if plan_type == "monthly":
-        # Срок жизни ключа в секундах (30 дней)
         expires_in_seconds = 30 * 24 * 60 * 60
     else: # yearly
-        # Срок жизни ключа в секундах (365 дней)
         expires_in_seconds = 365 * 24 * 60 * 60
 
-    # Сохраняем ключ в Redis со сроком жизни
     r.set(f"lepko:key:{new_key_string}", plan_type, ex=expires_in_seconds)
     
     expires_at = now + datetime.timedelta(seconds=expires_in_seconds)

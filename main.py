@@ -61,23 +61,18 @@ async def upload_file(request: Request, file: UploadFile, authorization: Optiona
         key = authorization.split("Bearer ")[1]
         if r.get(f"lepko:key:{key}"):
             is_premium = True
-
     max_size = PREMIUM_MAX_FILE_SIZE if is_premium else STANDARD_MAX_FILE_SIZE
-    
     if file.size > max_size:
         limit_mb = int(max_size / 1024 / 1024)
         raise HTTPException(status_code=413, detail=f"Файл слишком большой. Ваш лимит: {limit_mb} МБ.")
-
     is_allowed = any(file.content_type.startswith(allowed_type) for allowed_type in ALLOWED_FILE_TYPES)
     if not is_allowed:
         raise HTTPException(status_code=400, detail="Недопустимый тип файла.")
-        
     file_id = str(uuid.uuid4())
     file_path = UPLOAD_DIR / file.filename
     async with aiofiles.open(file_path, "wb") as f:
         while content := await file.read(1024 * 1024):
             await f.write(content)
-            
     r.set(f"lepko:drop:{file_id}", str(file_path), ex=3600)
     return {"file_id": file_id}
 

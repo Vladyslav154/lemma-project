@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let ws;
     let encryptionKey = '';
 
-    function encryptMessage(message, key) { return CryptoJS.AES.encrypt(message, key).toString(); }
+    function encryptMessage(message, key) { return CryptoJS.AES.encrypt(JSON.stringify(message), key).toString(); }
     function decryptMessage(encryptedMessage, key) { const bytes = CryptoJS.AES.decrypt(encryptedMessage, key); return bytes.toString(CryptoJS.enc.Utf8); }
 
     passwordForm.addEventListener('submit', (event) => {
@@ -25,7 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
         passwordOverlay.style.display = 'none';
         chatWrapper.style.display = 'flex';
         
-        // Проверяем премиум-статус и показываем опции
         const accessKey = localStorage.getItem('lepko_access_key');
         if (accessKey) {
             premiumOptions.style.display = 'block';
@@ -49,16 +48,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ws.onmessage = (event) => {
             try {
-                const data = JSON.parse(event.data);
-                const decryptedMessage = decryptMessage(data.message, encryptionKey);
+                // --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+                // Шаг 1: Сначала РАСШИФРОВЫВАЕМ полученный пакет.
+                const decryptedPayloadString = decryptMessage(event.data, encryptionKey);
                 
-                if (decryptedMessage) {
+                // Шаг 2: Теперь, когда у нас есть чистый JSON-текст, ПАРСИМ его.
+                const data = JSON.parse(decryptedPayloadString);
+                
+                if (data.message) {
                     const messageDiv = document.createElement('div');
-                    messageDiv.textContent = decryptedMessage;
+                    messageDiv.textContent = data.message;
                     messages.appendChild(messageDiv);
                     messages.scrollTop = messages.scrollHeight;
 
-                    // Если у сообщения есть "срок жизни" (ttl), запускаем таймер
                     if (data.ttl > 0) {
                         setTimeout(() => {
                             messageDiv.style.transition = 'opacity 0.5s';
@@ -67,19 +69,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         }, data.ttl * 1000);
                     }
                 }
-            } catch (e) { console.error("Ошибка дешифровки:", e); }
+            } catch (e) { console.error("Ошибка дешифровки или парсинга:", e); }
         };
 
         form.addEventListener('submit', (event) => {
             event.preventDefault();
             if (input.value && ws && ws.readyState === WebSocket.OPEN) {
-                // Собираем данные: сообщение и срок жизни
                 const messageData = {
                     message: input.value,
                     ttl: parseInt(ttlSelect.value, 10)
                 };
                 
-                const encryptedPayload = encryptMessage(JSON.stringify(messageData), encryptionKey);
+                const encryptedPayload = encryptMessage(messageData, encryptionKey);
                 ws.send(encryptedPayload);
                 input.value = '';
             }

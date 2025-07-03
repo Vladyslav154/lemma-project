@@ -5,13 +5,50 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pad - Lepko</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .container { max-width: 800px; height: 80vh; display: flex; flex-direction: column; }
+        #messages {
+            flex-grow: 1;
+            background-color: #1a1a1a;
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            border-radius: 4px;
+            padding: 15px;
+            overflow-y: auto; /* Включаем прокрутку для сообщений */
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        #messages div {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background-color: rgba(0, 255, 255, 0.1);
+            border-radius: 8px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        #form { display: flex; gap: 10px; }
+        #message-input {
+            flex-grow: 1;
+            background-color: #1a1a1a;
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            border-radius: 4px;
+            color: #e0e0e0;
+            padding: 10px;
+            font-family: 'Chakra Petch', sans-serif;
+        }
+        #form button { margin-top: 0; }
+    </style>
 </head>
 <body>
     <div class="container">
         <h1>Pad 📝</h1>
-        <textarea id="editor" placeholder="Начните печатать... Текст сохраняется автоматически."></textarea>
-        <div id="status">Подключение...</div>
-        <a href="/" class="home-link">Вернуться на главную</a>
+        <div id="messages"></div>
+        <form id="form" action="" onsubmit="sendMessage(event)">
+            <input type="text" id="message-input" placeholder="Напишите сообщение..." autocomplete="off"/>
+            <button>Отправить</button>
+        </form>
+        <div id="status" style="margin-top: 10px; font-size: 12px; color: #a0a0a0;">Подключение...</div>
+        <a href="/" class="home-link" style="margin-top: 15px;">Вернуться на главную</a>
     </div>
     <script src="/static/pad_script.js"></script>
 </body>

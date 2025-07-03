@@ -1,48 +1,41 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const editor = document.getElementById('editor');
     const status = document.getElementById('status');
+    const messages = document.getElementById('messages');
+    const form = document.getElementById('form');
+    const input = document.getElementById('message-input');
 
-    // --- БЛОК ГЕНЕРАЦИИ УНИКАЛЬНОГО URL ---
-    let boardId = window.location.pathname.split('/')[2];
+    // Получаем ID комнаты из URL. Если его нет, создаем новый.
+    let boardId = window.location.pathname.split('/pad/')[1];
     if (!boardId || boardId.trim() === '') {
         boardId = Math.random().toString(36).substring(2, 12);
         window.history.replaceState({}, document.title, `/pad/${boardId}`);
     }
-    // --- КОНЕЦ БЛОКА ---
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/${boardId}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-        status.textContent = `Подключено к доске: ${boardId}`;
+        status.textContent = `Вы в анонимной комнате: ${boardId}`;
     };
 
     ws.onmessage = (event) => {
-        if (editor.value !== event.data) {
-            editor.value = event.data;
-        }
+        const messageDiv = document.createElement('div');
+        messageDiv.textContent = event.data;
+        messages.appendChild(messageDiv);
+        // Автопрокрутка вниз при новом сообщении
+        messages.scrollTop = messages.scrollHeight;
     };
 
     ws.onclose = () => {
         status.textContent = 'Соединение потеряно.';
     };
 
-    function debounce(func, delay) {
-        let timeout;
-        return function(...args) {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(this, args), delay);
-        };
-    }
-
-    const debouncedSend = debounce((text) => {
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(text);
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (input.value && ws.readyState === WebSocket.OPEN) {
+            ws.send(input.value);
+            input.value = ''; // Очищаем поле ввода
         }
-    }, 300);
-
-    editor.addEventListener('input', () => {
-        debouncedSend(editor.value);
     });
 });

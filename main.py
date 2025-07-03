@@ -1,36 +1,19 @@
-import asyncio
 import os
 import uuid
-from pathlib import Path
 import datetime
 
 import aiofiles
 import redis
-from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, Depends, status, HTTPException
+from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
-
-# Импортируем наши модули для работы с базой данных
-import models
-import hashing
-from database import engine, SessionLocal
 
 # --- Настройка ---
 app = FastAPI()
-models.Base.metadata.create_all(bind=engine)
 
-# Функция для получения сессии базы данных
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# Подключение к Redis
+# Подключаемся к Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -88,7 +71,7 @@ async def get_file(file_id: str):
     return FileResponse(path=file_path, filename=file_path.name, background=tasks)
 
 
-# --- API для "Pad" (анонимный чат) ---
+# --- API для "Pad" ---
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
     await websocket.accept()
@@ -104,27 +87,25 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
         board_connections[board_id].remove(websocket)
 
 
-# --- API для генерации ключей доступа ---
+# --- API для генерации ключей доступа (теперь работает с Redis) ---
 @app.post('/keys/generate', status_code=status.HTTP_201_CREATED)
-def generate_key(plan_type: str, db: Session = Depends(get_db)):
+def generate_key(plan_type: str):
     if plan_type not in ["monthly", "yearly"]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип плана. Используйте 'monthly' или 'yearly'.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип плана.")
     
     new_key_string = f"LEPKO-{plan_type.upper()}-{str(uuid.uuid4()).upper()}"
     
     now = datetime.datetime.utcnow()
     if plan_type == "monthly":
-        expires = now + datetime.timedelta(days=30)
+        # Срок жизни ключа в секундах (30 дней)
+        expires_in_seconds = 30 * 24 * 60 * 60
     else: # yearly
-        expires = now + datetime.timedelta(days=365)
+        # Срок жизни ключа в секундах (365 дней)
+        expires_in_seconds = 365 * 24 * 60 * 60
 
-    new_key = models.AccessKey(
-        key_string=new_key_string,
-        expires_at=expires,
-        plan_type=plan_type
-    )
-    db.add(new_key)
-    db.commit()
-    db.refresh(new_key)
+    # Сохраняем ключ в Redis со сроком жизни
+    r.set(f"lepko:key:{new_key_string}", plan_type, ex=expires_in_seconds)
     
-    return {"access_key": new_key_string, "expires_at": expires.isoformat()}
+    expires_at = now + datetime.timedelta(seconds=expires_in_seconds)
+    return {"access_key": new_key_string, "expires_at": expires_at.isoformat()}
+

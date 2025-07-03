@@ -4,7 +4,3 @@ python-multipart
 aiofiles
 jinja2
 redis
-SQLAlchemy
-passlib[bcrypt]
-python-jose[cryptography]
-pysqlite3-binary

@@ -6,7 +6,8 @@ from pathlib import Path
 import aiofiles
 import redis
 from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse, BackgroundTask
+from fastapi.responses import FileResponse, HTMLResponse
+from starlette.background import BackgroundTasks # Правильный импорт
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -64,8 +65,11 @@ async def get_file(file_id: str):
 
     r.delete(f"lepko:drop:{file_id}")
 
-    task = BackgroundTask(os.remove, file_path)
-    return FileResponse(path=file_path, filename=file_path.name, background=task)
+    # Правильное создание фоновой задачи
+    tasks = BackgroundTasks()
+    tasks.add_task(os.remove, file_path)
+    
+    return FileResponse(path=file_path, filename=file_path.name, background=tasks)
 
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):

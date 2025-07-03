@@ -1,19 +1,12 @@
-import asyncio
-import os
-import uuid
-import datetime
-import html
+# ... (все импорты остаются прежними) ...
+import asyncio, os, uuid, datetime, html
 from pathlib import Path
-
-import aiofiles
-import redis
-# Добавляем Form для правильной обработки данных из JavaScript
+import aiofiles, redis
 from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, status, Depends, Form
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -23,16 +16,13 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(REDIS_URL, decode_responses=True)
-
 UPLOAD_DIR = Path("temp_uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 board_connections = {}
-
 MAX_FILE_SIZE = 100 * 1024 * 1024
 ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain"]
 
@@ -53,7 +43,13 @@ async def read_pad_board(request: Request, board_id: str):
 async def read_upgrade(request: Request):
     return templates.TemplateResponse("upgrade.html", {"request": request})
 
-# --- API для "Drop" ---
+@app.get("/activate", response_class=HTMLResponse)
+async def read_activate(request: Request):
+    return templates.TemplateResponse("activate.html", {"request": request})
+
+# --- API ---
+# ... (весь код для /upload, /file/{file_id}, /ws/{board_id}, /keys/generate остается без изменений) ...
+
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile):
     if file.size > MAX_FILE_SIZE:
@@ -85,7 +81,6 @@ async def get_file(file_id: str):
     tasks.add_task(os.remove, file_path)
     return FileResponse(path=file_path, filename=file_path.name, background=tasks)
 
-# --- API для "Pad" ---
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
     await websocket.accept()
@@ -101,24 +96,23 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
     except WebSocketDisconnect:
         board_connections[board_id].remove(websocket)
 
-# --- API для генерации ключей ---
 @app.post('/keys/generate', status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
-# ИЗМЕНЕНИЕ ЗДЕСЬ: Используем Form() для получения plan_type
 def generate_key(request: Request, plan_type: str = Form(...)):
     if plan_type not in ["monthly", "yearly"]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип плана.")
-    
     new_key_string = f"LEPKO-{plan_type.upper()}-{str(uuid.uuid4()).upper()}"
-    
     now = datetime.datetime.utcnow()
-    if plan_type == "monthly":
-        expires_in_seconds = 30 * 24 * 60 * 60
-    else:
-        expires_in_seconds = 365 * 24 * 60 * 60
-
+    expires_in_seconds = 30*24*60*60 if plan_type == "monthly" else 365*24*60*60
     r.set(f"lepko:key:{new_key_string}", plan_type, ex=expires_in_seconds)
-    
     expires_at = now + datetime.timedelta(seconds=expires_in_seconds)
     return {"access_key": new_key_string, "expires_at": expires_at.isoformat()}
+
+# --- НОВЫЙ API для проверки ключа ---
+@app.get("/keys/check/{key_string}")
+def check_key(key_string: str):
+    plan_type = r.get(f"lepko:key:{key_string}")
+    if not plan_type:
+        raise HTTPException(status_code=404, detail="Ключ не найден или истек.")
+    return {"status": "active", "plan": plan_type}
 

@@ -22,10 +22,8 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(REDIS_URL, decode_responses=True)
-
 UPLOAD_DIR = Path("temp_uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 templates = Jinja2Templates(directory="templates")
@@ -40,16 +38,12 @@ ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "applicat
 # --- Маршруты HTML ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request): return templates.TemplateResponse("home.html", {"request": request})
-
 @app.get("/drop", response_class=HTMLResponse)
 async def read_drop(request: Request): return templates.TemplateResponse("drop.html", {"request": request})
-
 @app.get("/pad/{board_id:path}", response_class=HTMLResponse)
 async def read_pad_board(request: Request, board_id: str): return templates.TemplateResponse("pad.html", {"request": request, "board_id": board_id})
-
 @app.get("/upgrade", response_class=HTMLResponse)
 async def read_upgrade(request: Request): return templates.TemplateResponse("upgrade.html", {"request": request})
-
 @app.get("/activate", response_class=HTMLResponse)
 async def read_activate(request: Request): return templates.TemplateResponse("activate.html", {"request": request})
 
@@ -95,8 +89,7 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
     try:
         while True:
             data = await websocket.receive_text()
-            sanitized_data = html.escape(data)
-            for connection in board_connections[board_id]: await connection.send_text(sanitized_data)
+            for connection in board_connections[board_id]: await connection.send_text(data)
     except WebSocketDisconnect:
         board_connections[board_id].remove(websocket)
 

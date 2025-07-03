@@ -14,5 +14,19 @@
   "yearly_plan_promo": "Save 35%",
   "get_key_button": "Get Key",
   "your_new_key": "Your new access key. Save it!",
-  "we_cant_recover": "We cannot recover it if you lose it."
+  "we_cant_recover": "We cannot recover it if you lose it.",
+  "activate_page_title": "Key Activation",
+  "activate_page_subtitle": "Paste your access key to activate premium features.",
+  "activate_button": "Activate",
+  "drop_page_title": "Drop 📁",
+  "drop_drag_text": "Drag & drop a file here or click to select",
+  "drop_get_link_button": "Get Link",
+  "drop_your_link": "Your disposable link:",
+  "pad_page_title": "Pad 📝",
+  "pad_password_title": "Secure Room",
+  "pad_password_subtitle": "Enter a shared password for encryption.",
+  "pad_password_placeholder": "Room password...",
+  "pad_enter_button": "Enter",
+  "pad_message_placeholder": "Write a message...",
+  "pad_send_button": "Send"
 }

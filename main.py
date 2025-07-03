@@ -2,28 +2,49 @@ import asyncio
 import os
 import uuid
 from pathlib import Path
+import datetime
 
 import aiofiles
 import redis
-from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, Depends, status, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
-from starlette.background import BackgroundTasks # Правильный импорт
+from starlette.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 
+# Импортируем наши модули для работы с базой данных
+from . import models, hashing
+from .database import engine, SessionLocal
+
+# --- Настройка ---
 app = FastAPI()
 
+# Создаем все таблицы в базе данных при старте (включая новую таблицу для ключей)
+models.Base.metadata.create_all(bind=engine)
+
+# Функция для получения сессии базы данных
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Подключение к Redis
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
+# Остальные настройки
 UPLOAD_DIR = Path("temp_uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
-
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 board_connections = {}
 
+
+# --- Маршруты для страниц (HTML) ---
+# ... (весь ваш старый код для read_root, read_drop, read_pad_board) ...
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse("home.html", {"request": request})
@@ -36,48 +57,44 @@ async def read_drop(request: Request):
 async def read_pad_board(request: Request, board_id: str):
     return templates.TemplateResponse("pad.html", {"request": request, "board_id": board_id})
 
+
+# --- API для "Drop" ---
+# ... (весь ваш старый код для upload_file и get_file) ...
 @app.post("/upload")
 async def upload_file(file: UploadFile):
     file_id = str(uuid.uuid4())
     file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
-
     try:
         async with aiofiles.open(file_path, "wb") as f:
             while content := await file.read(1024 * 1024):
                 await f.write(content)
     except Exception:
         return {"error": "Failed to save file on server."}, 500
-
     r.set(f"lepko:drop:{file_id}", str(file_path), ex=3600)
     return {"file_id": file_id}
 
 @app.get("/file/{file_id}")
 async def get_file(file_id: str):
     file_path_str = r.get(f"lepko:drop:{file_id}")
-    
     if not file_path_str:
         return HTMLResponse(content="<h1>Файл не найден или срок его действия истек.</h1>", status_code=404)
-    
     file_path = Path(file_path_str)
-
     if not file_path.exists():
         return HTMLResponse(content="<h1>Ошибка: Файл не найден на диске сервера.</h1>", status_code=404)
-
     r.delete(f"lepko:drop:{file_id}")
-
-    # Правильное создание фоновой задачи
     tasks = BackgroundTasks()
     tasks.add_task(os.remove, file_path)
-    
     return FileResponse(path=file_path, filename=file_path.name, background=tasks)
 
+
+# --- API для "Pad" ---
+# ... (весь ваш старый код для websocket_endpoint) ...
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
     await websocket.accept()
     if board_id not in board_connections:
         board_connections[board_id] = []
     board_connections[board_id].append(websocket)
-
     try:
         while True:
             data = await websocket.receive_text()
@@ -85,3 +102,32 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
                 await connection.send_text(data)
     except WebSocketDisconnect:
         board_connections[board_id].remove(websocket)
+
+
+# --- НОВЫЙ БЛОК: API для генерации ключей доступа ---
+@app.post('/keys/generate', status_code=status.HTTP_201_CREATED)
+def generate_key(plan_type: str, db: Session = Depends(get_db)):
+    if plan_type not in ["monthly", "yearly"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип плана. Используйте 'monthly' или 'yearly'.")
+
+    # Генерируем уникальный ключ
+    new_key_string = f"LEPKO-{plan_type.upper()}-{str(uuid.uuid4()).upper()}"
+    
+    # Рассчитываем дату окончания
+    now = datetime.datetime.utcnow()
+    if plan_type == "monthly":
+        expires = now + datetime.timedelta(days=30)
+    else: # yearly
+        expires = now + datetime.timedelta(days=365)
+
+    # Создаем и сохраняем ключ в базе данных
+    new_key = models.AccessKey(
+        key_string=new_key_string,
+        expires_at=expires,
+        plan_type=plan_type
+    )
+    db.add(new_key)
+    db.commit()
+    db.refresh(new_key)
+    
+    return {"access_key": new_key_string, "expires_at": expires.isoformat()}

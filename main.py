@@ -4,17 +4,15 @@ import uuid
 import datetime
 import html
 from pathlib import Path
-from typing import Optional # <-- Добавляем новый импорт
+from typing import Optional
 
 import aiofiles
 import redis
-# Добавляем Header для получения ключа из заголовков
-from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, status, Depends, Form, Header 
+from fastapi import FastAPI, Request, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, status, Depends, Form, Header
 from fastapi.responses import FileResponse, HTMLResponse
 from starlette.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -24,44 +22,46 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(REDIS_URL, decode_responses=True)
+
 UPLOAD_DIR = Path("temp_uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 board_connections = {}
 
-# --- Настройки безопасности и лимитов ---
-STANDARD_MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
-PREMIUM_MAX_FILE_SIZE = 1024 * 1024 * 1024 # 1 GB
-ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain"]
+# --- Настройки безопасности ---
+STANDARD_MAX_FILE_SIZE = 100 * 1024 * 1024
+PREMIUM_MAX_FILE_SIZE = 1024 * 1024 * 1024
+ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
 
-# --- Маршруты для страниц (HTML) ---
-# ... (остаются без изменений) ...
+# --- Маршруты HTML ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request): return templates.TemplateResponse("home.html", {"request": request})
+
 @app.get("/drop", response_class=HTMLResponse)
 async def read_drop(request: Request): return templates.TemplateResponse("drop.html", {"request": request})
+
 @app.get("/pad/{board_id:path}", response_class=HTMLResponse)
 async def read_pad_board(request: Request, board_id: str): return templates.TemplateResponse("pad.html", {"request": request, "board_id": board_id})
+
 @app.get("/upgrade", response_class=HTMLResponse)
 async def read_upgrade(request: Request): return templates.TemplateResponse("upgrade.html", {"request": request})
+
 @app.get("/activate", response_class=HTMLResponse)
 async def read_activate(request: Request): return templates.TemplateResponse("activate.html", {"request": request})
 
-# --- API для "Drop" с проверкой премиум-ключа ---
+# --- API ---
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile, authorization: Optional[str] = Header(None)):
-    
-    # Проверяем, есть ли у пользователя активный премиум-ключ
     is_premium = False
     if authorization and authorization.startswith("Bearer "):
         key = authorization.split("Bearer ")[1]
         if r.get(f"lepko:key:{key}"):
             is_premium = True
 
-    # Устанавливаем лимит размера файла в зависимости от статуса
     max_size = PREMIUM_MAX_FILE_SIZE if is_premium else STANDARD_MAX_FILE_SIZE
     
     if file.size > max_size:
@@ -73,18 +73,14 @@ async def upload_file(request: Request, file: UploadFile, authorization: Optiona
         raise HTTPException(status_code=400, detail="Недопустимый тип файла.")
         
     file_id = str(uuid.uuid4())
-    file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
-    try:
-        async with aiofiles.open(file_path, "wb") as f:
-            while content := await file.read(1024 * 1024):
-                await f.write(content)
-    except Exception:
-        return {"error": "Failed to save file on server."}, 500
+    file_path = UPLOAD_DIR / file.filename
+    async with aiofiles.open(file_path, "wb") as f:
+        while content := await file.read(1024 * 1024):
+            await f.write(content)
+            
     r.set(f"lepko:drop:{file_id}", str(file_path), ex=3600)
     return {"file_id": file_id}
 
-# --- Остальные API (get_file, websocket_endpoint, generate_key, check_key) ---
-# ... (остаются без изменений) ...
 @app.get("/file/{file_id}")
 async def get_file(file_id: str):
     file_path_str = r.get(f"lepko:drop:{file_id}")
@@ -94,7 +90,7 @@ async def get_file(file_id: str):
     r.delete(f"lepko:drop:{file_id}")
     tasks = BackgroundTasks()
     tasks.add_task(os.remove, file_path)
-    return FileResponse(path=file_path, filename=file_path.name, background=tasks)
+    return FileResponse(path=file_path, filename=Path(file_path_str).name, background=tasks)
 
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):

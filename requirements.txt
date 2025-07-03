@@ -4,3 +4,5 @@ python-multipart
 aiofiles
 jinja2
 redis
+starlette
+slowapi

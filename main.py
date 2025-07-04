@@ -1,9 +1,4 @@
-import asyncio
-import os
-import uuid
-import datetime
-import html
-import json
+import asyncio, os, uuid, datetime, html, json
 from pathlib import Path
 from typing import Optional
 
@@ -14,7 +9,6 @@ from fastapi.responses import FileResponse, HTMLResponse
 from starlette.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -25,60 +19,45 @@ app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# ... (весь код до websocket_endpoint остается без изменений) ...
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(REDIS_URL, decode_responses=True)
-
 UPLOAD_DIR = Path("temp_uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 board_connections = {}
-
-# --- Настройки безопасности ---
 STANDARD_MAX_FILE_SIZE = 100 * 1024 * 1024
 PREMIUM_MAX_FILE_SIZE = 1024 * 1024 * 1024
 ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
 
-# --- Маршруты HTML ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request): return templates.TemplateResponse("home.html", {"request": request})
-
 @app.get("/drop", response_class=HTMLResponse)
 async def read_drop(request: Request): return templates.TemplateResponse("drop.html", {"request": request})
-
 @app.get("/pad/{board_id:path}", response_class=HTMLResponse)
 async def read_pad_board(request: Request, board_id: str): return templates.TemplateResponse("pad.html", {"request": request, "board_id": board_id})
-
 @app.get("/upgrade", response_class=HTMLResponse)
 async def read_upgrade(request: Request): return templates.TemplateResponse("upgrade.html", {"request": request})
-
 @app.get("/activate", response_class=HTMLResponse)
 async def read_activate(request: Request): return templates.TemplateResponse("activate.html", {"request": request})
 
-# --- API ---
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile, authorization: Optional[str] = Header(None)):
     is_premium = False
     if authorization and authorization.startswith("Bearer "):
         key = authorization.split("Bearer ")[1]
         if r.get(f"lepko:key:{key}"): is_premium = True
-
     max_size = PREMIUM_MAX_FILE_SIZE if is_premium else STANDARD_MAX_FILE_SIZE
-    
     if file.size > max_size:
         limit_mb = int(max_size / 1024 / 1024)
         raise HTTPException(status_code=413, detail=f"Файл слишком большой. Ваш лимит: {limit_mb} МБ.")
-
     is_allowed = any(file.content_type.startswith(allowed_type) for allowed_type in ALLOWED_FILE_TYPES)
-    if not is_allowed:
-        raise HTTPException(status_code=400, detail="Недопустимый тип файла.")
-        
+    if not is_allowed: raise HTTPException(status_code=400, detail="Недопустимый тип файла.")
     file_id = str(uuid.uuid4())
     file_path = UPLOAD_DIR / file.filename
     async with aiofiles.open(file_path, "wb") as f:
-        while content := await file.read(1024 * 1024):
-            await f.write(content)
-            
+        while content := await file.read(1024 * 1024): await f.write(content)
     r.set(f"lepko:drop:{file_id}", str(file_path), ex=3600)
     return {"file_id": file_id}
 
@@ -101,9 +80,10 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
     try:
         while True:
             data_str = await websocket.receive_text()
-            # Пересылаем сообщение всем в комнате, чтобы они могли его обработать
+            # Просто пересылаем сообщение всем остальным участникам комнаты
             for connection in board_connections[board_id]:
-                await connection.send_text(data_str)
+                if connection != websocket:
+                    await connection.send_text(data_str)
     except WebSocketDisconnect:
         board_connections[board_id].remove(websocket)
 

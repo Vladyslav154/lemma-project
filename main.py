@@ -11,19 +11,15 @@ import secrets
 # --- 1. Настройка приложения ---
 app = FastAPI()
 
-# Добавляем "сессии" для запоминания языка. Нужен пакет starlette.
 app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(16))
-
-# Подключаем папки для статики (css) и шаблонов (html)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Папка для загружаемых файлов
 UPLOAD_FOLDER = 'temp_uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# --- 2. Логика перевода (встроена прямо сюда) ---
+# --- 2. Логика перевода ---
 TRANSLATIONS = {}
 LANGUAGES = {'en': 'EN', 'ru': 'RU'}
 
@@ -35,22 +31,19 @@ def load_translations():
             with open(file_path, 'r', encoding='utf-8') as f:
                 TRANSLATIONS[lang_code] = json.load(f)
 
-load_translations() # Загружаем переводы при старте сервера
+load_translations()
 
-# --- 3. Главная функция для рендеринга шаблонов с переводом ---
+# --- 3. Главная функция для рендеринга шаблонов ---
 def render(template_name: str, request: Request, context: dict = {}):
-    # Определяем язык для текущего запроса
     lang_code = request.query_params.get('lang')
     if lang_code in LANGUAGES:
         request.session['lang'] = lang_code
     else:
         lang_code = request.session.get('lang', 'en')
 
-    # Создаем функцию `t` для перевода внутри шаблонов
     def t(key: str):
         return TRANSLATIONS.get(lang_code, {}).get(key, key)
 
-    # Собираем полный контекст для шаблона
     full_context = {
         "request": request,
         "t": t,
@@ -78,8 +71,10 @@ async def route_post_drop(request: Request, file: UploadFile = File(...)):
         buffer.write(await file.read())
     
     download_link = str(request.base_url) + 'uploads/' + filename
-    # Предполагаем, что есть шаблон drop_success.html
-    return render("drop_success.html", request, {"link": download_link})
+    
+    # ИСПРАВЛЕНО: Возвращаем простой HTML вместо шаблона
+    t, _ = render("", request) # Получаем функцию 't' для перевода
+    return HTMLResponse(f'<h1>{t("drop_success_title")}</h1><p>{t("drop_success_message")} <a href="{download_link}">{download_link}</a></p><a href="/drop">{t("drop_success_back_button")}</a>')
 
 @app.get("/uploads/{filename}")
 async def route_get_upload(filename: str):
@@ -90,11 +85,8 @@ async def route_get_upload(filename: str):
 
 @app.get("/pad", response_class=HTMLResponse)
 async def route_get_pad(request: Request):
+    # ИСПРАВЛЕНО: Убрана логика с комнатами, просто показываем страницу
     return render("pad.html", request)
-
-@app.get("/pad/{room_name}", response_class=HTMLResponse)
-async def route_pad_room(request: Request, room_name: str):
-    return render("pad_room.html", request, {"room_name": room_name})
 
 @app.get("/upgrade", response_class=HTMLResponse)
 async def route_get_upgrade(request: Request):

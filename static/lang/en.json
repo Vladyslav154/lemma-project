@@ -20,6 +20,7 @@
   "activate_button": "Activate",
   "premium_feature_1": "File size limit up to 1 GB",
   "premium_feature_2": "Self-destructing messages in chat",
-  "premium_feature_3": "Early access to new features ('Whisper' voice chat)",
-  "premium_feature_4": "Priority support"
+  "premium_feature_3": "Early access to new features",
+  "premium_feature_4": "Priority support",
+  "get_trial_button": "Get a 14-day trial key"
 }

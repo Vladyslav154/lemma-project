@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const monthlyBtn = document.getElementById('monthly-btn');
     const yearlyBtn = document.getElementById('yearly-btn');
+    const trialBtn = document.getElementById('trial-btn');
     const keyDisplay = document.getElementById('key-display');
     const accessKeyElem = document.getElementById('access-key');
 
@@ -9,48 +10,44 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('plan_type', planType);
 
         try {
-            // Показываем пользователю, что что-то происходит
-            keyDisplay.style.display = 'none';
-            if (planType === 'monthly') {
-                monthlyBtn.textContent = 'Создание счета...';
-                monthlyBtn.disabled = true;
-            } else {
-                yearlyBtn.textContent = 'Создание счета...';
-                yearlyBtn.disabled = true;
-            }
+            const btn = (planType === 'monthly') ? monthlyBtn : yearlyBtn;
+            btn.textContent = 'Создание счета...';
+            btn.disabled = true;
 
-            const response = await fetch('/keys/generate', {
-                method: 'POST',
-                body: formData
-            });
-
+            const response = await fetch('/keys/generate', { method: 'POST', body: formData });
             const data = await response.json();
 
             if (response.ok && data.payment_url) {
-                // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Перенаправляем на страницу оплаты ---
                 window.location.href = data.payment_url;
             } else {
-                // Показываем ошибку, если что-то пошло не так
-                accessKeyElem.textContent = `Ошибка: ${data.detail || 'Не удалось создать ссылку на оплату.'}`;
+                accessKeyElem.textContent = `Ошибка: ${data.detail || 'Не удалось создать ссылку.'}`;
                 keyDisplay.style.display = 'block';
             }
-
         } catch (error) {
             console.error('Ошибка:', error);
-            accessKeyElem.textContent = 'Произошла критическая ошибка. Попробуйте позже.';
+        }
+    };
+
+    const handleTrialSelection = async () => {
+        trialBtn.disabled = true;
+        trialBtn.textContent = 'Генерация...';
+        try {
+            const response = await fetch('/keys/generate_trial', { method: 'POST' });
+            const data = await response.json();
             keyDisplay.style.display = 'block';
-        } finally {
-            // Возвращаем кнопки в исходное состояние
-            if (planType === 'monthly') {
-                monthlyBtn.textContent = 'Получить ключ';
-                monthlyBtn.disabled = false;
+            if (response.ok) {
+                accessKeyElem.textContent = data.access_key;
             } else {
-                yearlyBtn.textContent = 'Получить ключ';
-                yearlyBtn.disabled = false;
+                accessKeyElem.textContent = `Ошибка: ${data.detail || 'Не удалось сгенерировать ключ.'}`;
             }
+        } catch (error) {
+            console.error('Ошибка:', error);
+        } finally {
+            trialBtn.disabled = false;
         }
     };
 
     monthlyBtn.addEventListener('click', () => handlePlanSelection('monthly'));
     yearlyBtn.addEventListener('click', () => handlePlanSelection('yearly'));
+    trialBtn.addEventListener('click', handleTrialSelection);
 });

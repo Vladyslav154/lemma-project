@@ -13,20 +13,15 @@
         .plan-header { text-align: center; }
         .plan-header p { font-size: 24px; font-weight: bold; }
         .plan-button-wrapper { text-align: center; margin-top: 20px; }
-        
         #key-display { margin-top: 30px; padding: 20px; background-color: #1a1a1a; border: 1px solid #00ffff; border-radius: 4px; display: none; }
         #access-key { font-size: 14px; color: #00ffff; word-wrap: break-word; }
+        .trial-section { text-align: center; margin: 40px 0; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="lang-switcher" style="text-align: right; margin-bottom: 10px;">
-            <button onclick="setLanguage('ru')">RU</button>
-            <button onclick="setLanguage('en')">EN</button>
-        </div>
         <h1 data-i18n-key="upgrade_page_title"></h1>
         <p data-i18n-key="upgrade_page_subtitle" style="text-align: center;"></p>
-        
         <div class="plan">
             <div class="plan-header">
                 <h2 data-i18n-key="monthly_plan"></h2>
@@ -40,9 +35,8 @@
                 <button id="monthly-btn" data-i18n-key="get_key_button"></button>
             </div>
         </div>
-
         <div class="plan">
-            <div class="plan-header">
+             <div class="plan-header">
                 <h2 data-i18n-key="yearly_plan"></h2>
                 <p>$110 (<span data-i18n-key="yearly_plan_promo"></span>)</p>
             </div>
@@ -55,6 +49,10 @@
              <div class="plan-button-wrapper">
                 <button id="yearly-btn" data-i18n-key="get_key_button"></button>
             </div>
+        </div>
+
+        <div class="trial-section">
+            <button id="trial-btn" data-i18n-key="get_trial_button"></button>
         </div>
 
         <div id="key-display">

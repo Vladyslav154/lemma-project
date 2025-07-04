@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lepko</title>
+    <title>Lepko - Простые приватные инструменты</title>
     <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .stats-block { display: flex; gap: 40px; justify-content: center; margin-top: 30px; }
+        .stat-item { text-align: center; }
+        .stat-item span { font-size: 28px; font-weight: bold; color: #00ffff; }
+        .stat-item p { margin-top: 5px; font-size: 14px; color: #a0a0a0; }
+    </style>
 </head>
 <body>
     <div class="container home-container">
-        <div class="lang-switcher">
-            <button onclick="setLanguage('ru')">RU</button>
-            <button onclick="setLanguage('en')">EN</button>
-        </div>
         <div class="brand-block">
-            <h1 data-i18n-key="title"></h1>
-            <p data-i18n-key="subtitle"></p>
+            <h1 data-i18n-key="title">Lepko</h1>
+            <p data-i18n-key="subtitle">Простые, приватные и надежные инструменты.</p>
             <a href="/upgrade" class="upgrade-link" data-i18n-key="upgrade_link"></a>
             <a href="/activate" class="activate-link" data-i18n-key="activate_link"></a>
         </div>
@@ -23,6 +25,17 @@
             <a href="/pad" class="tool-link"><h2 data-i18n-key="pad_title"></h2><p data-i18n-key="pad_subtitle"></p></a>
         </div>
     </div>
+    <div class="stats-block">
+        <div class="stat-item">
+            <span id="stats-keys">0</span>
+            <p>Ключей выдано</p>
+        </div>
+        <div class="stat-item">
+            <span id="stats-files">0</span>
+            <p>Файлов передано</p>
+        </div>
+    </div>
+    <script src="/static/home_script.js"></script>
     <script src="/static/i18n.js"></script>
 </body>
 </html>

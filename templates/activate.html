@@ -8,10 +8,14 @@
 </head>
 <body>
     <div class="container">
+        <div class="lang-switcher" style="text-align: right; margin-bottom: 10px;">
+            <button onclick="setLanguage('ru')">RU</button>
+            <button onclick="setLanguage('en')">EN</button>
+        </div>
         <h1 data-i18n-key="activate_page_title">Активация ключа</h1>
         <p data-i18n-key="activate_page_subtitle">Вставьте ваш ключ доступа для активации премиум-функций.</p>
         <form id="activation-form">
-            <input type="text" id="key-input" placeholder="LEPKO-..." autocomplete="off"/>
+            <input type="text" id="key-input" placeholder="LEPKO-..."/>
             <button type="submit" data-i18n-key="activate_button">Активировать</button>
         </form>
         <div id="activation-status" style="margin-top: 20px;"></div>

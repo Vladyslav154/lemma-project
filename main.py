@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from starlette.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -18,8 +19,6 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# ... (весь код до websocket_endpoint остается без изменений) ...
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = redis.from_url(REDIS_URL, decode_responses=True)
 UPLOAD_DIR = Path("temp_uploads")
@@ -31,6 +30,7 @@ STANDARD_MAX_FILE_SIZE = 100 * 1024 * 1024
 PREMIUM_MAX_FILE_SIZE = 1024 * 1024 * 1024
 ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
 
+# --- Маршруты HTML ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request): return templates.TemplateResponse("home.html", {"request": request})
 @app.get("/drop", response_class=HTMLResponse)
@@ -42,6 +42,7 @@ async def read_upgrade(request: Request): return templates.TemplateResponse("upg
 @app.get("/activate", response_class=HTMLResponse)
 async def read_activate(request: Request): return templates.TemplateResponse("activate.html", {"request": request})
 
+# --- API ---
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile, authorization: Optional[str] = Header(None)):
     is_premium = False
@@ -80,7 +81,7 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
     try:
         while True:
             data_str = await websocket.receive_text()
-            # Просто пересылаем сообщение всем остальным участникам комнаты
+            # ИСПРАВЛЕННАЯ ЛОГИКА: Просто пересылаем сообщение всем, кроме отправителя
             for connection in board_connections[board_id]:
                 if connection != websocket:
                     await connection.send_text(data_str)

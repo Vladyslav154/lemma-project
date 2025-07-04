@@ -1,33 +1,12 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drop - Lepko</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
-</head>
-<body>
-    <div class="container">
-        <div class="lang-switcher" style="text-align: right; margin-bottom: 10px;">
-            <button onclick="setLanguage('ru')">RU</button>
-            <button onclick="setLanguage('en')">EN</button>
-        </div>
-        <h1 data-i18n-key="drop_page_title"></h1>
-        <div id="upload-area">
-            <p data-i18n-key="drop_drag_text"></p>
-            <p id="file-name"></p>
-            <input type="file" id="file-input">
-        </div>
-        <button id="upload-button" style="display: none;" data-i18n-key="drop_get_link_button"></button>
-        <div id="link-area" style="display: none;">
-            <p data-i18n-key="drop_your_link"></p>
-            <a href="" id="file-link" target="_blank"></a>
-            <div id="qrcode" style="margin-top: 20px; padding: 10px; background: white; display: inline-block; border-radius: 4px;"></div>
-        </div>
-        <a href="/" class="home-link">Вернуться на главную</a>
-    </div>
-    <script src="/static/drop_script.js"></script>
-    <script src="/static/i18n.js"></script>
-</body>
-</html>
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ t('drop_title') }}</h1>
+<p>{{ t('drop_instruction') }}</p>
+<form action="/drop" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" required>
+    <button type="submit">{{ t('upload_button') }}</button>
+</form>
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+{% endblock %}

@@ -1,11 +1,9 @@
 {% extends "base.html" %}
-
-{% block title %}{{ t('pad_title') }} - {{ t('app_title') }}{% endblock %}
-
 {% block content %}
 <h1>{{ t('pad_title') }}</h1>
-<p>{{ t('pad_instruction') }}</p>
-
-<textarea placeholder="{{ t('pad_placeholder') }}" style="width: 100%; height: 40vh;"></textarea>
-
+<p>{{ t('pad_create_instruction') }}</p>
+<form action="/pad/create" method="post">
+    <input type="password" name="password" placeholder="{{ t('pad_password_placeholder') }}" required>
+    <button type="submit">{{ t('pad_create_button') }}</button>
+</form>
 {% endblock %}

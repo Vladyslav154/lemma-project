@@ -24,7 +24,8 @@ translator = Translator(app)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Вот исправленная строка:
+    return render_template('home.html')
 
 @app.route('/drop', methods=['GET', 'POST'])
 def drop():

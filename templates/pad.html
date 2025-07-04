@@ -15,8 +15,7 @@
         #form { display: flex; gap: 10px; }
         #message-input { flex-grow: 1; }
         #form button { margin-top: 0; }
-        #call-controls { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-        #status { font-size: 12px; color: #a0a0a0; }
+        #status { margin-top: 10px; font-size: 12px; color: #a0a0a0; }
     </style>
 </head>
 <body>
@@ -24,22 +23,18 @@
         <h1 data-i18n-key="pad_page_title">Pad 📝</h1>
         
         <div id="password-overlay">
-            <h2 data-i18n-key="pad_password_title">Защищенная комната</h2>
-            <p data-i18n-key="pad_password_subtitle">Введите общий пароль для шифрования.</p>
+            <h2 data-i18n-key="pad_password_title"></h2>
+            <p data-i18n-key="pad_password_subtitle"></p>
             <form id="password-form">
-                <input type="password" id="password-input" data-i18n-key-placeholder="pad_password_placeholder" placeholder="Пароль комнаты..." autocomplete="off"/>
-                <button type="submit" data-i18n-key="pad_enter_button">Войти</button>
+                <input type="password" id="password-input" data-i18n-key-placeholder="pad_password_placeholder" autocomplete="off"/>
+                <button type="submit" data-i18n-key="pad_enter_button"></button>
             </form>
         </div>
 
         <div id="chat-wrapper">
-            <div id="call-controls">
-                <button id="call-btn">Начать звонок 🎤</button>
-                <div id="status">Подключение...</div>
-            </div>
             <div id="messages"></div>
             <form id="form" action="">
-                <input type="text" id="message-input" data-i18n-key-placeholder="pad_message_placeholder" placeholder="Напишите сообщение..." autocomplete="off"/>
+                <input type="text" id="message-input" data-i18n-key-placeholder="pad_message_placeholder" autocomplete="off"/>
                 <div id="premium-options" style="display: none;">
                     <select id="ttl-select">
                         <option value="0">Навсегда</option>
@@ -47,14 +42,13 @@
                         <option value="60">1 мин</option>
                     </select>
                 </div>
-                <button type="submit" data-i18n-key="pad_send_button">Отправить</button>
+                <button type="submit" data-i18n-key="pad_send_button"></button>
             </form>
+            <div id="status"></div>
         </div>
 
         <a href="/" class="home-link" style="margin-top: 15px;">Вернуться на главную</a>
     </div>
-    <audio id="remote-audio" autoplay></audio>
-
     <script src="/static/pad_script.js"></script>
     <script src="/static/i18n.js"></script>
 </body>

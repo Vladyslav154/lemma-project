@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Элементы DOM ---
     const passwordOverlay = document.getElementById('password-overlay');
     const passwordForm = document.getElementById('password-form');
     const passwordInput = document.getElementById('password-input');
@@ -10,141 +9,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const messages = document.getElementById('messages');
     const form = document.getElementById('form');
     const input = document.getElementById('message-input');
-    const callBtn = document.getElementById('call-btn');
-    const remoteAudio = document.getElementById('remote-audio');
-    const voiceMaskLabel = document.getElementById('voice-mask-label');
-    const voiceMaskCheckbox = document.getElementById('voice-mask-checkbox');
 
-    // --- Переменные состояния ---
     let ws;
     let encryptionKey = '';
-    let peerConnection;
-    let localStream;
-    let audioContext;
-    let boardId;
-    const servers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-    // --- Инициализация ---
-    const init = () => {
-        boardId = window.location.pathname.split('/pad/')[1] || Math.random().toString(36).substring(2, 12);
-        if (!window.location.pathname.includes(boardId)) {
-            window.history.replaceState({}, document.title, `/pad/${boardId}`);
-        }
-        passwordForm.addEventListener('submit', handlePasswordSubmit);
-    };
-
-    // --- Обработчики событий ---
-    const handlePasswordSubmit = (event) => {
-        event.preventDefault();
-        const password = passwordInput.value;
-        if (!password) { alert('Пожалуйста, введите пароль.'); return; }
-        encryptionKey = password;
-        passwordOverlay.style.display = 'none';
-        chatWrapper.style.display = 'flex';
-        const accessKey = localStorage.getItem('lepko_access_key');
-        if (accessKey) premiumOptions.style.display = 'block';
-        initializeWebSocket();
-    };
-
-    const handleMessageFormSubmit = (event) => {
-        event.preventDefault();
-        if (input.value) {
-            const messageData = { message: input.value, ttl: parseInt(ttlSelect.value, 10) };
-            displayChatMessage(messageData); // Мгновенный показ своего сообщения
-            const encryptedPayload = encryptMessage(messageData, encryptionKey);
-            sendMessageToServer('chat', encryptedPayload);
-            input.value = '';
+    // --- Функции ---
+    const encryptMessage = (msg, key) => CryptoJS.AES.encrypt(JSON.stringify(msg), key).toString();
+    const decryptMessage = (encMsg, key) => CryptoJS.AES.decrypt(encMsg, key).toString(CryptoJS.enc.Utf8);
+    const sendMessageToServer = (payload) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(payload);
         }
     };
 
-    const handleCallButtonClick = async () => {
-        if (!peerConnection) {
-            await createPeerConnection();
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            sendMessageToServer('webrtc', { type: 'offer', offer });
-        }
-    };
-    
-    // --- Основные функции ---
-    const initializeWebSocket = () => {
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws/${boardId}`;
-        ws = new WebSocket(wsUrl);
-        ws.onopen = () => { status.textContent = `Вы в защищенной комнате: ${boardId}`; };
-        ws.onclose = () => { status.textContent = 'Соединение потеряно.'; };
-        ws.onmessage = handleWebSocketMessage;
-        form.addEventListener('submit', handleMessageFormSubmit);
-        callBtn.addEventListener('click', handleCallButtonClick);
-    };
-
-    const createPeerConnection = async () => {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        peerConnection = new RTCPeerConnection(servers);
-
-        const audioStream = getProcessedAudioStream(localStream);
-        audioStream.getTracks().forEach(track => peerConnection.addTrack(track, audioStream));
-
-        peerConnection.ontrack = event => { remoteAudio.srcObject = event.streams[0]; };
-        peerConnection.onicecandidate = event => {
-            if (event.candidate) sendMessageToServer('webrtc', { type: 'ice-candidate', candidate: event.candidate });
-        };
-
-        callBtn.disabled = true;
-        callBtn.textContent = "Звонок активен...";
-        voiceMaskLabel.style.display = 'flex';
-    };
-
-    const handleWebSocketMessage = async (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'chat') {
-            handleChatMessage(data.payload);
-        } else if (data.type === 'webrtc') {
-            await handleWebRTCSignal(data.payload);
-        }
-    };
-    
-    const handleChatMessage = (payload) => {
-        try {
-            const decryptedPayload = decryptMessage(payload, encryptionKey);
-            const data = JSON.parse(decryptedPayload);
-            if (data.message) displayChatMessage(data);
-        } catch (e) { console.error("Ошибка дешифровки чата:", e); }
-    };
-
-    const handleWebRTCSignal = async (signal) => {
-        try {
-            if (signal.type === 'offer') {
-                await createPeerConnection();
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.offer));
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                sendMessageToServer('webrtc', { type: 'answer', answer: answer });
-            } else if (signal.type === 'answer') {
-                if (peerConnection) await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.answer));
-            } else if (signal.type === 'ice-candidate') {
-                if (peerConnection) await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate));
-            }
-        } catch (e) { console.error("Ошибка WebRTC:", e); }
-    };
-
-    const getProcessedAudioStream = (stream) => {
-        if (!voiceMaskCheckbox.checked) return stream;
-
-        audioContext = audioContext || new AudioContext();
-        const source = audioContext.createMediaStreamSource(stream);
-        const destination = audioContext.createMediaStreamDestination();
-        const biquadFilter = audioContext.createBiquadFilter();
-        
-        biquadFilter.type = "lowshelf";
-        biquadFilter.frequency.setValueAtTime(1000, audioContext.currentTime);
-        biquadFilter.gain.setValueAtTime(25, audioContext.currentTime);
-        
-        source.connect(biquadFilter);
-        biquadFilter.connect(destination);
-        return destination.stream;
-    };
-    
     const displayChatMessage = (messageData) => {
         const msgDiv = document.createElement('div');
         msgDiv.textContent = messageData.message;
@@ -158,9 +35,54 @@ document.addEventListener('DOMContentLoaded', () => {
             }, messageData.ttl * 1000);
         }
     };
+
+    const handleIncomingMessage = (encryptedPayload) => {
+        try {
+            const decryptedPayload = decryptMessage(encryptedPayload, encryptionKey);
+            const data = JSON.parse(decryptedPayload);
+            if (data.message) {
+                displayChatMessage(data);
+            }
+        } catch (e) { console.error("Ошибка дешифровки:", e); }
+    };
+
+    const initializeWebSocket = () => {
+        let boardId = window.location.pathname.split('/pad/')[1];
+        if (!boardId || boardId.trim() === '') {
+            boardId = Math.random().toString(36).substring(2, 12);
+            window.history.replaceState({}, document.title, `/pad/${boardId}`);
+        }
+        
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/${boardId}`;
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => { status.textContent = `Вы в защищенной комнате: ${boardId}`; };
+        ws.onclose = () => { status.textContent = 'Соединение потеряно.'; };
+        ws.onmessage = (event) => {
+            handleIncomingMessage(event.data);
+        };
+    };
     
-    const encryptMessage = (msg, key) => CryptoJS.AES.encrypt(JSON.stringify(msg), key).toString();
-    const decryptMessage = (encMsg, key) => CryptoJS.AES.decrypt(encMsg, key).toString(CryptoJS.enc.Utf8);
-    
-    init(); // Запускаем всю логику
+    // --- Обработчики событий ---
+    passwordForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const password = passwordInput.value;
+        if (!password) { alert('Пожалуйста, введите пароль.'); return; }
+        encryptionKey = password;
+        passwordOverlay.style.display = 'none';
+        chatWrapper.style.display = 'flex';
+        const accessKey = localStorage.getItem('lepko_access_key');
+        if (accessKey) premiumOptions.style.display = 'block';
+        initializeWebSocket();
+    });
+
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (input.value) {
+            const messageData = { message: input.value, ttl: parseInt(ttlSelect.value, 10) };
+            const encryptedPayload = encryptMessage(messageData, encryptionKey);
+            sendMessageToServer(encryptedPayload);
+            input.value = '';
+        }
+    });
 });

@@ -7,3 +7,4 @@ redis
 starlette
 slowapi
 coinbase-commerce
+itsdangerous

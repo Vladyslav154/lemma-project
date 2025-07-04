@@ -1,59 +1,101 @@
 import os
-from flask import Flask, render_template, request, send_from_directory, session
+import json
+from fastapi import FastAPI, Request, File, UploadFile
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 from werkzeug.utils import secure_filename
 import secrets
 
-# Импортируем наш новый класс
-from translator import Translator
+# --- 1. Настройка приложения ---
+app = FastAPI()
 
-app = Flask(__name__)
+# Добавляем "сессии" для запоминания языка. Нужен пакет starlette.
+app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(16))
 
-# Конфигурация
-app.config['UPLOAD_FOLDER'] = 'temp_uploads'
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
-app.secret_key = secrets.token_hex(16)
+# Подключаем папки для статики (css) и шаблонов (html)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
-# Создаем папку для загрузок, если ее нет
-if not os.path.exists(app.config['UPLOAD_FOLDER']):
-    os.makedirs(app.config['UPLOAD_FOLDER'])
+# Папка для загружаемых файлов
+UPLOAD_FOLDER = 'temp_uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-# Инициализируем переводчик
-translator = Translator(app)
+# --- 2. Логика перевода (встроена прямо сюда) ---
+TRANSLATIONS = {}
+LANGUAGES = {'en': 'EN', 'ru': 'RU'}
 
-# --- Маршруты (Routes) ---
+def load_translations():
+    lang_dir = os.path.join('static', 'lang')
+    for lang_code in LANGUAGES:
+        file_path = os.path.join(lang_dir, f'{lang_code}.json')
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                TRANSLATIONS[lang_code] = json.load(f)
 
-@app.route('/')
-def index():
-    # Вот исправленная строка:
-    return render_template('home.html')
+load_translations() # Загружаем переводы при старте сервера
 
-@app.route('/drop', methods=['GET', 'POST'])
-def drop():
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            return "No file part"
-        file = request.files['file']
-        if file.filename == '':
-            return "No selected file"
-        if file:
-            filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            
-            download_link = request.host_url + 'uploads/' + filename
-            return render_template('drop_success.html', link=download_link)
-    return render_template('drop.html')
+# --- 3. Главная функция для рендеринга шаблонов с переводом ---
+def render(template_name: str, request: Request, context: dict = {}):
+    # Определяем язык для текущего запроса
+    lang_code = request.query_params.get('lang')
+    if lang_code in LANGUAGES:
+        request.session['lang'] = lang_code
+    else:
+        lang_code = request.session.get('lang', 'en')
 
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    # Создаем функцию `t` для перевода внутри шаблонов
+    def t(key: str):
+        return TRANSLATIONS.get(lang_code, {}).get(key, key)
 
-@app.route('/pad', methods=['GET'])
-def pad():
-    return render_template('pad.html')
+    # Собираем полный контекст для шаблона
+    full_context = {
+        "request": request,
+        "t": t,
+        "LANGUAGES": LANGUAGES,
+        "current_lang": lang_code,
+        **context
+    }
+    return templates.TemplateResponse(template_name, full_context)
 
-@app.route('/upgrade')
-def upgrade():
-    return render_template('upgrade.html')
+# --- 4. Маршруты (Routes) ---
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@app.get("/", response_class=HTMLResponse)
+async def route_root(request: Request):
+    return render("home.html", request)
+
+@app.get("/drop", response_class=HTMLResponse)
+async def route_get_drop(request: Request):
+    return render("drop.html", request)
+
+@app.post("/drop", response_class=HTMLResponse)
+async def route_post_drop(request: Request, file: UploadFile = File(...)):
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(UPLOAD_FOLDER, filename)
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+    
+    download_link = str(request.base_url) + 'uploads/' + filename
+    # Предполагаем, что есть шаблон drop_success.html
+    return render("drop_success.html", request, {"link": download_link})
+
+@app.get("/uploads/{filename}")
+async def route_get_upload(filename: str):
+    file_path = os.path.join(UPLOAD_FOLDER, filename)
+    if os.path.exists(file_path):
+        return FileResponse(path=file_path, filename=filename)
+    return HTMLResponse("File not found", status_code=404)
+
+@app.get("/pad", response_class=HTMLResponse)
+async def route_get_pad(request: Request):
+    return render("pad.html", request)
+
+@app.get("/pad/{room_name}", response_class=HTMLResponse)
+async def route_pad_room(request: Request, room_name: str):
+    return render("pad_room.html", request, {"room_name": room_name})
+
+@app.get("/upgrade", response_class=HTMLResponse)
+async def route_get_upgrade(request: Request):
+    return render("upgrade.html", request)

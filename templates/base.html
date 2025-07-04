@@ -19,9 +19,6 @@
             <div class="lang-switcher">
                 <a href="?lang=en" class="lang-btn {% if current_lang == 'en' %}active{% endif %}">EN</a>
                 <a href="?lang=ru" class="lang-btn {% if current_lang == 'ru' %}active{% endif %}">RU</a>
-                <a href="?lang=de" class="lang-btn {% if current_lang == 'de' %}active{% endif %}">DE</a>
-                <a href="?lang=cs" class="lang-btn {% if current_lang == 'cs' %}active{% endif %}">CS</a>
-                <a href="?lang=uk" class="lang-btn {% if current_lang == 'uk' %}active{% endif %}">UK</a>
             </div>
         </div>
     </header>
@@ -29,10 +26,5 @@
     <main class="container">
         {% block content %}{% endblock %}
     </main>
-
-    <footer class="site-footer-bottom">
-        <p>&copy; 2025 {{ t('app_title') }}. All rights reserved.</p>
-    </footer>
-
 </body>
 </html>

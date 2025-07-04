@@ -14,7 +14,6 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 # --- Настройка ---
-# ... (весь этот блок остается без изменений) ...
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 app.state.limiter = limiter
@@ -31,7 +30,6 @@ PREMIUM_MAX_FILE_SIZE = 1024 * 1024 * 1024
 ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
 
 # --- Маршруты HTML ---
-# ... (остаются без изменений) ...
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request): return templates.TemplateResponse("home.html", {"request": request})
 @app.get("/drop", response_class=HTMLResponse)
@@ -44,7 +42,6 @@ async def read_upgrade(request: Request): return templates.TemplateResponse("upg
 async def read_activate(request: Request): return templates.TemplateResponse("activate.html", {"request": request})
 
 # --- API ---
-# ... (все API для Drop и Ключей остаются без изменений) ...
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile, authorization: Optional[str] = Header(None)):
     is_premium = False
@@ -75,6 +72,20 @@ async def get_file(file_id: str):
     tasks.add_task(os.remove, file_path)
     return FileResponse(path=file_path, filename=Path(file_path_str).name, background=tasks)
 
+@app.websocket("/ws/{board_id}")
+async def websocket_endpoint(websocket: WebSocket, board_id: str):
+    await websocket.accept()
+    if board_id not in board_connections: board_connections[board_id] = []
+    board_connections[board_id].append(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Возвращаем простую и надежную логику: отправить всем в комнате
+            for connection in board_connections[board_id]:
+                await connection.send_text(data)
+    except WebSocketDisconnect:
+        board_connections[board_id].remove(websocket)
+
 @app.post('/keys/generate', status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 def generate_key(request: Request, plan_type: str = Form(...)):
@@ -91,19 +102,3 @@ def check_key(key_string: str):
     plan_type = r.get(f"lepko:key:{key_string}")
     if not plan_type: raise HTTPException(status_code=404, detail="Ключ не найден или истек.")
     return {"status": "active", "plan": plan_type}
-
-# --- API для "Pad" (возвращаем простую и надежную логику) ---
-@app.websocket("/ws/{board_id}")
-async def websocket_endpoint(websocket: WebSocket, board_id: str):
-    await websocket.accept()
-    if board_id not in board_connections:
-        board_connections[board_id] = []
-    board_connections[board_id].append(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            # Просто рассылаем сообщение всем в комнате
-            for connection in board_connections[board_id]:
-                await connection.send_text(data)
-    except WebSocketDisconnect:
-        board_connections[board_id].remove(websocket)

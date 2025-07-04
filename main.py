@@ -9,9 +9,12 @@ from fastapi.responses import FileResponse, HTMLResponse
 from starlette.background import BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+
+from coinbase_commerce.client import Client
 
 # --- Настройка ---
 limiter = Limiter(key_func=get_remote_address)
@@ -29,6 +32,13 @@ STANDARD_MAX_FILE_SIZE = 100 * 1024 * 1024
 PREMIUM_MAX_FILE_SIZE = 1024 * 1024 * 1024
 ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
 
+# --- Инициализация клиента Coinbase ---
+COINBASE_API_KEY = os.getenv("COINBASE_COMMERCE_API_KEY")
+if COINBASE_API_KEY:
+    client = Client(api_key=COINBASE_API_KEY)
+else:
+    client = None
+
 # --- Маршруты HTML ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request): return templates.TemplateResponse("home.html", {"request": request})
@@ -44,6 +54,7 @@ async def read_activate(request: Request): return templates.TemplateResponse("ac
 # --- API ---
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile, authorization: Optional[str] = Header(None)):
+    # ... (код без изменений) ...
     is_premium = False
     if authorization and authorization.startswith("Bearer "):
         key = authorization.split("Bearer ")[1]
@@ -63,6 +74,7 @@ async def upload_file(request: Request, file: UploadFile, authorization: Optiona
 
 @app.get("/file/{file_id}")
 async def get_file(file_id: str):
+    # ... (код без изменений) ...
     file_path_str = r.get(f"lepko:drop:{file_id}")
     if not file_path_str: return HTMLResponse(content="<h1>Файл не найден или срок его действия истек.</h1>", status_code=404)
     file_path = Path(file_path_str)
@@ -74,13 +86,13 @@ async def get_file(file_id: str):
 
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
+    # ... (код без изменений) ...
     await websocket.accept()
     if board_id not in board_connections: board_connections[board_id] = []
     board_connections[board_id].append(websocket)
     try:
         while True:
             data = await websocket.receive_text()
-            # Простая и надежная логика: отправить всем в комнате, включая отправителя
             for connection in board_connections[board_id]:
                 await connection.send_text(data)
     except WebSocketDisconnect:
@@ -88,17 +100,31 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
 
 @app.post('/keys/generate', status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
-def generate_key(request: Request, plan_type: str = Form(...)):
-    if plan_type not in ["monthly", "yearly"]: raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный тип плана.")
-    new_key_string = f"LEPKO-{plan_type.upper()}-{str(uuid.uuid4()).upper()}"
-    now = datetime.datetime.utcnow()
-    expires_in_seconds = 30*24*60*60 if plan_type == "monthly" else 365*24*60*60
-    r.set(f"lepko:key:{new_key_string}", plan_type, ex=expires_in_seconds)
-    expires_at = now + datetime.timedelta(seconds=expires_in_seconds)
-    return {"access_key": new_key_string, "expires_at": expires_at.isoformat()}
+def generate_payment_link(request: Request, plan_type: str = Form(...)):
+    if not client:
+        raise HTTPException(status_code=503, detail="Платежная система не настроена на сервере.")
+    if plan_type not in ["monthly", "yearly"]:
+        raise HTTPException(status_code=400, detail="Неверный тип плана.")
+    
+    name = "Lepko Premium (1 месяц)" if plan_type == "monthly" else "Lepko Premium (1 год)"
+    amount = "14.00" if plan_type == "monthly" else "110.00"
+
+    try:
+        charge = client.charge.create(
+            name=name,
+            description=f'Анонимный ключ доступа к Lepko Premium.',
+            local_price={'amount': amount, 'currency': 'USD'},
+            pricing_type='fixed_price',
+            redirect_url=f"https://{request.url.hostname}/",
+            cancel_url=f"https://{request.url.hostname}/upgrade",
+        )
+        return {"payment_url": charge.hosted_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка Coinbase: {e}")
 
 @app.get("/keys/check/{key_string}")
 def check_key(key_string: str):
+    # ... (код без изменений) ...
     plan_type = r.get(f"lepko:key:{key_string}")
     if not plan_type: raise HTTPException(status_code=404, detail="Ключ не найден или истек.")
     return {"status": "active", "plan": plan_type}

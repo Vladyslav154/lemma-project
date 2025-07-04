@@ -1,36 +1,56 @@
-// static/upgrade.js
 document.addEventListener('DOMContentLoaded', () => {
     const monthlyBtn = document.getElementById('monthly-btn');
     const yearlyBtn = document.getElementById('yearly-btn');
     const keyDisplay = document.getElementById('key-display');
-    const accessKeyElement = document.getElementById('access-key');
+    const accessKeyElem = document.getElementById('access-key');
 
-    const generateKey = async (planType) => {
-        // Показываем пользователю, что что-то происходит
-        keyDisplay.style.display = 'block';
-        accessKeyElement.textContent = 'Генерация ключа...';
+    const handlePlanSelection = async (planType) => {
+        const formData = new FormData();
+        formData.append('plan_type', planType);
 
         try {
-            const response = await fetch('/keys/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `plan_type=${planType}`
-            });
-
-            if (!response.ok) {
-                throw new Error('Произошла ошибка при создании ключа.');
+            // Показываем пользователю, что что-то происходит
+            keyDisplay.style.display = 'none';
+            if (planType === 'monthly') {
+                monthlyBtn.textContent = 'Создание счета...';
+                monthlyBtn.disabled = true;
+            } else {
+                yearlyBtn.textContent = 'Создание счета...';
+                yearlyBtn.disabled = true;
             }
 
+            const response = await fetch('/keys/generate', {
+                method: 'POST',
+                body: formData
+            });
+
             const data = await response.json();
-            accessKeyElement.textContent = data.access_key;
+
+            if (response.ok && data.payment_url) {
+                // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Перенаправляем на страницу оплаты ---
+                window.location.href = data.payment_url;
+            } else {
+                // Показываем ошибку, если что-то пошло не так
+                accessKeyElem.textContent = `Ошибка: ${data.detail || 'Не удалось создать ссылку на оплату.'}`;
+                keyDisplay.style.display = 'block';
+            }
 
         } catch (error) {
-            accessKeyElement.textContent = error.message;
+            console.error('Ошибка:', error);
+            accessKeyElem.textContent = 'Произошла критическая ошибка. Попробуйте позже.';
+            keyDisplay.style.display = 'block';
+        } finally {
+            // Возвращаем кнопки в исходное состояние
+            if (planType === 'monthly') {
+                monthlyBtn.textContent = 'Получить ключ';
+                monthlyBtn.disabled = false;
+            } else {
+                yearlyBtn.textContent = 'Получить ключ';
+                yearlyBtn.disabled = false;
+            }
         }
     };
 
-    monthlyBtn.addEventListener('click', () => generateKey('monthly'));
-    yearlyBtn.addEventListener('click', () => generateKey('yearly'));
+    monthlyBtn.addEventListener('click', () => handlePlanSelection('monthly'));
+    yearlyBtn.addEventListener('click', () => handlePlanSelection('yearly'));
 });

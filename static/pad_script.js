@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Элементы DOM ---
     const passwordOverlay = document.getElementById('password-overlay');
     const passwordForm = document.getElementById('password-form');
     const passwordInput = document.getElementById('password-input');
@@ -11,38 +10,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('form');
     const input = document.getElementById('message-input');
 
-    // --- Переменные состояния ---
     let ws;
     let encryptionKey = '';
-    
-    // --- Инициализация ---
-    // Генерируем URL СРАЗУ при загрузке страницы
+
     let boardId = window.location.pathname.split('/pad/')[1];
     if (!boardId || boardId.trim() === '') {
         boardId = Math.random().toString(36).substring(2, 12);
         window.history.replaceState({}, document.title, `/pad/${boardId}`);
     }
 
-    // --- Функции ---
     const encryptMessage = (msg, key) => CryptoJS.AES.encrypt(JSON.stringify(msg), key).toString();
     const decryptMessage = (encMsg, key) => CryptoJS.AES.decrypt(encMsg, key).toString(CryptoJS.enc.Utf8);
+
+    const displayChatMessage = (messageData) => {
+        const msgDiv = document.createElement('div');
+        msgDiv.textContent = messageData.message;
+        messages.appendChild(msgDiv);
+        messages.scrollTop = messages.scrollHeight;
+        if (messageData.ttl > 0) {
+            setTimeout(() => {
+                msgDiv.style.transition = 'opacity 0.5s';
+                msgDiv.style.opacity = '0';
+                setTimeout(() => msgDiv.remove(), 500);
+            }, messageData.ttl * 1000);
+        }
+    };
 
     const handleIncomingMessage = (encryptedPayload) => {
         try {
             const decryptedPayload = decryptMessage(encryptedPayload, encryptionKey);
             const data = JSON.parse(decryptedPayload);
             if (data.message) {
-                const msgDiv = document.createElement('div');
-                msgDiv.textContent = data.message;
-                messages.appendChild(msgDiv);
-                messages.scrollTop = messages.scrollHeight;
-                if (data.ttl > 0) {
-                    setTimeout(() => {
-                        msgDiv.style.transition = 'opacity 0.5s';
-                        msgDiv.style.opacity = '0';
-                        setTimeout(() => msgDiv.remove(), 500);
-                    }, data.ttl * 1000);
-                }
+                displayChatMessage(data);
             }
         } catch (e) { console.error("Ошибка дешифровки:", e); }
     };
@@ -56,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ws.onmessage = (event) => handleIncomingMessage(event.data);
     };
 
-    // --- Обработчики событий ---
     passwordForm.addEventListener('submit', (event) => {
         event.preventDefault();
         const password = passwordInput.value;

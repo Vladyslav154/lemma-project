@@ -21,20 +21,18 @@
 <body>
     <div class="container pad-container">
         <h1 data-i18n-key="pad_page_title">Pad 📝</h1>
-        
         <div id="password-overlay">
-            <h2 data-i18n-key="pad_password_title"></h2>
-            <p data-i18n-key="pad_password_subtitle"></p>
+            <h2 data-i18n-key="pad_password_title">Защищенная комната</h2>
+            <p data-i18n-key="pad_password_subtitle">Введите общий пароль для шифрования.</p>
             <form id="password-form">
-                <input type="password" id="password-input" data-i18n-key-placeholder="pad_password_placeholder" autocomplete="off"/>
-                <button type="submit" data-i18n-key="pad_enter_button"></button>
+                <input type="password" id="password-input" data-i18n-key-placeholder="pad_password_placeholder" placeholder="Пароль комнаты..." autocomplete="off"/>
+                <button type="submit" data-i18n-key="pad_enter_button">Войти</button>
             </form>
         </div>
-
         <div id="chat-wrapper">
             <div id="messages"></div>
             <form id="form" action="">
-                <input type="text" id="message-input" data-i18n-key-placeholder="pad_message_placeholder" autocomplete="off"/>
+                <input type="text" id="message-input" data-i18n-key-placeholder="pad_message_placeholder" placeholder="Напишите сообщение..." autocomplete="off"/>
                 <div id="premium-options" style="display: none;">
                     <select id="ttl-select">
                         <option value="0">Навсегда</option>
@@ -42,11 +40,10 @@
                         <option value="60">1 мин</option>
                     </select>
                 </div>
-                <button type="submit" data-i18n-key="pad_send_button"></button>
+                <button type="submit" data-i18n-key="pad_send_button">Отправить</button>
             </form>
             <div id="status"></div>
         </div>
-
         <a href="/" class="home-link" style="margin-top: 15px;">Вернуться на главную</a>
     </div>
     <script src="/static/pad_script.js"></script>

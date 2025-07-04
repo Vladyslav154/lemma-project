@@ -1,13 +1,34 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // ... (все переменные остаются теми же) ...
+    // --- Переменные ---
     const passwordOverlay = document.getElementById('password-overlay');
-    // ... и так далее
+    const passwordForm = document.getElementById('password-form');
+    const passwordInput = document.getElementById('password-input');
+    const chatWrapper = document.getElementById('chat-wrapper');
+    const premiumOptions = document.getElementById('premium-options');
+    const ttlSelect = document.getElementById('ttl-select');
+    const status = document.getElementById('status');
+    const messages = document.getElementById('messages');
+    const form = document.getElementById('form');
+    const input = document.getElementById('message-input');
+    const callBtn = document.getElementById('call-btn');
+    const remoteAudio = document.getElementById('remote-audio');
+    const voiceMaskLabel = document.getElementById('voice-mask-label');
+    const voiceMaskCheckbox = document.getElementById('voice-mask-checkbox');
 
     let ws;
     let encryptionKey = '';
     let peerConnection;
     let localStream;
+    let audioContext;
     const servers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    // --- ИСПРАВЛЕНИЕ: Генерируем URL СРАЗУ при загрузке страницы ---
+    let boardId = window.location.pathname.split('/pad/')[1];
+    if (!boardId || boardId.trim() === '') {
+        boardId = Math.random().toString(36).substring(2, 12);
+        window.history.replaceState({}, document.title, `/pad/${boardId}`);
+    }
+    // --- КОНЕЦ ИСПРАВЛЕНИЯ ---
 
     // --- Функции ---
     const encryptMessage = (msg, key) => CryptoJS.AES.encrypt(JSON.stringify(msg), key).toString();
@@ -42,11 +63,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { console.error("Ошибка дешифровки:", e); }
     };
     
-    // ... (остальной код, включая WebRTC, остается таким же, но я привожу его полностью для надежности) ...
     const handleWebRTCSignal = async (signal) => {
         try {
             if (!peerConnection && (signal.type === 'answer' || signal.type === 'ice-candidate')) return;
-            if (!peerConnection) await setupPeerConnection();
+            if (!peerConnection) await setupPeerConnection(false);
 
             if (signal.type === 'offer') {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.offer));
@@ -56,29 +76,53 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (signal.type === 'answer') {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(signal.answer));
             } else if (signal.type === 'ice-candidate') {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                if (peerConnection.signalingState !== "closed") {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                }
             }
         } catch (e) { console.error("Ошибка WebRTC:", e); }
     };
 
-    const setupPeerConnection = async () => {
+    const setupPeerConnection = async (isInitiator) => {
         localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         peerConnection = new RTCPeerConnection(servers);
-        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+        
+        audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(localStream);
+        const destination = audioContext.createMediaStreamDestination();
+        const biquadFilter = audioContext.createBiquadFilter();
+        biquadFilter.type = "lowshelf";
+        biquadFilter.frequency.setValueAtTime(1000, audioContext.currentTime);
+        biquadFilter.gain.setValueAtTime(25, audioContext.currentTime);
+        source.connect(biquadFilter);
+        biquadFilter.connect(destination);
+
+        let streamToSend = voiceMaskCheckbox.checked ? destination.stream : localStream;
+        streamToSend.getTracks().forEach(track => peerConnection.addTrack(track, streamToSend));
+
+        voiceMaskCheckbox.addEventListener('change', () => {
+            const newStream = voiceMaskCheckbox.checked ? destination.stream : localStream;
+            const sender = peerConnection.getSenders().find(s => s.track.kind === 'audio');
+            sender.replaceTrack(newStream.getAudioTracks()[0]);
+        });
+
         peerConnection.ontrack = event => { remoteAudio.srcObject = event.streams[0]; };
         peerConnection.onicecandidate = event => {
             if (event.candidate) sendMessageToServer('webrtc', { type: 'ice-candidate', candidate: event.candidate });
         };
+        
         callBtn.disabled = true;
         callBtn.textContent = "Звонок активен...";
+        voiceMaskLabel.style.display = 'flex';
+
+        if (isInitiator) {
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            sendMessageToServer('webrtc', { type: 'offer', offer: offer });
+        }
     };
 
     const initializeWebSocket = () => {
-        let boardId = window.location.pathname.split('/pad/')[1] || Math.random().toString(36).substring(2, 12);
-        if (!window.location.pathname.includes(boardId)) {
-            window.history.replaceState({}, document.title, `/pad/${boardId}`);
-        }
-        
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${window.location.host}/ws/${boardId}`;
         ws = new WebSocket(wsUrl);
@@ -108,18 +152,12 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         if (input.value) {
             const messageData = { message: input.value, ttl: parseInt(ttlSelect.value, 10) };
+            displayChatMessage(messageData);
             const encryptedPayload = encryptMessage(messageData, encryptionKey);
             sendMessageToServer('chat', encryptedPayload);
-            // ИСПРАВЛЕНИЕ: Мгновенно показываем собственное сообщение
-            displayChatMessage(messageData);
             input.value = '';
         }
     });
 
-    callBtn.addEventListener('click', async () => {
-        await setupPeerConnection();
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        sendMessageToServer('webrtc', { type: 'offer', offer: offer });
-    });
+    callBtn.addEventListener('click', () => setupPeerConnection(true));
 });

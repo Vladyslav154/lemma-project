@@ -13,6 +13,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+# --- Настройка ---
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
 app.state.limiter = limiter
@@ -28,6 +29,7 @@ STANDARD_MAX_FILE_SIZE = 100 * 1024 * 1024
 PREMIUM_MAX_FILE_SIZE = 1024 * 1024 * 1024
 ALLOWED_FILE_TYPES = ["image/", "video/", "audio/", "application/pdf", "application/zip", "text/plain", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
 
+# --- Маршруты HTML ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request): return templates.TemplateResponse("home.html", {"request": request})
 @app.get("/drop", response_class=HTMLResponse)
@@ -39,6 +41,7 @@ async def read_upgrade(request: Request): return templates.TemplateResponse("upg
 @app.get("/activate", response_class=HTMLResponse)
 async def read_activate(request: Request): return templates.TemplateResponse("activate.html", {"request": request})
 
+# --- API ---
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile, authorization: Optional[str] = Header(None)):
     is_premium = False
@@ -77,6 +80,7 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
     try:
         while True:
             data = await websocket.receive_text()
+            # Простая и надежная логика: отправить всем в комнате, включая отправителя
             for connection in board_connections[board_id]:
                 await connection.send_text(data)
     except WebSocketDisconnect:

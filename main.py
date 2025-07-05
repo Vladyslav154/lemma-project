@@ -3,7 +3,8 @@ import uuid
 import redis
 import cloudinary
 import cloudinary.uploader
-from typing import Dict
+import json
+from typing import Dict, List
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -45,11 +46,11 @@ else:
     r = redis.from_url(redis_url, decode_responses=True)
 
 # Mount static files and templates with absolute paths
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
-# --- WebSocket Connection Manager for Rooms ---
+# --- WebSocket Connection Manager for Chat Rooms ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
@@ -61,9 +62,10 @@ class ConnectionManager:
         self.active_connections[room_id].append(websocket)
 
     def disconnect(self, websocket: WebSocket, room_id: str):
-        self.active_connections[room_id].remove(websocket)
-        if not self.active_connections[room_id]:
-            del self.active_connections[room_id]
+        if room_id in self.active_connections and websocket in self.active_connections[room_id]:
+            self.active_connections[room_id].remove(websocket)
+            if not self.active_connections[room_id]:
+                del self.active_connections[room_id]
 
     async def broadcast(self, message: str, room_id: str):
         if room_id in self.active_connections:
@@ -123,7 +125,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await manager.connect(websocket, room_id)
     try:
         while True:
+            # Принимаем данные, которые теперь должны быть в формате JSON
             data = await websocket.receive_text()
+            # Просто пересылаем их всем в комнате
             await manager.broadcast(data, room_id)
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_id)

@@ -10,11 +10,11 @@ COPY requirements.txt .
 # Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all project files into the working directory
+# ИСПРАВЛЕНО: Копируем всё содержимое текущей папки, включая static
 COPY . .
 
 # Expose the port the app will run on
 EXPOSE 10000
 
-# CORRECTED: Run main:app directly, not src.main:app
+# Command to run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]

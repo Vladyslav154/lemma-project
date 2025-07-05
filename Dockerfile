@@ -1,26 +1,20 @@
-# Use Python 3.11, as was originally intended
+# Use Python 3.11 as the base image
 FROM python:3.11-slim
 
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy the requirements file first to leverage Docker's caching
+# Copy requirements file first to leverage Docker's cache
 COPY requirements.txt .
 
-# Install dependencies
+# Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# --- ADD THESE LINES ---
-# Explicitly copy the directories needed by your application
-COPY ./templates ./templates
-COPY ./static ./static
+# Copy all project files into the working directory
+COPY . .
 
-# Copy the rest of the application files
-COPY main.py .
-COPY .env .
-
-# Expose the port your application will run on
+# Expose the port the app will run on
 EXPOSE 10000
 
-# Command to run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
+# Command to run the application, specifying the 'src' module
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "10000"]

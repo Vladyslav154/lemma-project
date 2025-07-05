@@ -1,21 +1,26 @@
-# Используем Python 3.11, как было у вас изначально
+# Use Python 3.11, as was originally intended
 FROM python:3.11-slim
 
-# Устанавливаем рабочую директорию внутри контейнера
+# Set the working directory inside the container
 WORKDIR /app
 
-# Копируем файл с зависимостями
+# Copy the requirements file first to leverage Docker's caching
 COPY requirements.txt .
 
-# Устанавливаем зависимости
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем все остальные файлы проекта
-COPY . .
+# --- ADD THESE LINES ---
+# Explicitly copy the directories needed by your application
+COPY ./templates ./templates
+COPY ./static ./static
 
-# Сообщаем Docker, что наше приложение будет слушать порт 10000.
-# Это важно для Render и для документации.
+# Copy the rest of the application files
+COPY main.py .
+COPY .env .
+
+# Expose the port your application will run on
 EXPOSE 10000
 
-# Команда для запуска. Используем порт 10000.
+# Command to run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]

@@ -1,22 +1,23 @@
-import redis
 import os
-import uuid
-import cloudinary
-import cloudinary.uploader
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
+import redis
+import uuid
+import cloudinary
+import cloudinary.uploader
+
+# --- THIS IS THE FIX ---
+# Define the absolute path to the project's root directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- Configuration ---
-
-# Load environment variables from .env file
 load_dotenv()
-
 app = FastAPI()
 
-# Configure Cloudinary using credentials from .env
+# Configure Cloudinary
 cloudinary.config(
   cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
   api_key = os.getenv("CLOUDINARY_API_KEY"),
@@ -25,60 +26,29 @@ cloudinary.config(
 )
 
 # Connect to Redis
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+redis_url = os.getenv("REDIS_URL")
+if not redis_url:
+    r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+else:
+    r = redis.from_url(redis_url, decode_responses=True)
 
-# Mount templates and static files
-templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# --- APPLY THE FIX HERE ---
+# Mount static files using the absolute path
+app.mount(
+    "/static",
+    StaticFiles(directory=os.path.join(BASE_DIR, "static")),
+    name="static"
+)
+# Point to the templates directory using the absolute path
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
 
 # --- Endpoints (API) ---
+# The rest of your code stays the same...
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     """Serves the main HTML page."""
     return templates.TemplateResponse("index.html", {"request": request})
 
-@app.post("/upload")
-async def upload_file(request: Request, file: UploadFile = File(...)):
-    """Accepts a file, uploads it to Cloudinary, and creates a one-time link."""
-    
-    try:
-        # Upload the file directly to Cloudinary
-        upload_result = cloudinary.uploader.upload(file.file)
-        # Get the secure URL of the uploaded file
-        file_url = upload_result.get("secure_url")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not upload file to Cloudinary: {e}")
-
-    # Generate a unique ID for our one-time link
-    link_id = str(uuid.uuid4().hex[:8])
-
-    # Save the Cloudinary URL in Redis for 15 minutes (900 seconds)
-    r.setex(link_id, 900, file_url)
-    
-    # Form the one-time download link for our service
-    base_url = str(request.base_url)
-    one_time_link = f"{base_url}file/{link_id}"
-
-    return {"download_link": one_time_link}
-
-@app.get("/file/{link_id}")
-async def get_file_redirect(link_id: str):
-    """
-    Retrieves the Cloudinary URL from Redis using the one-time ID,
-    deletes the record, and redirects the user to the actual file.
-    """
-    file_url = r.get(link_id)
-    
-    if not file_url:
-        raise HTTPException(status_code=404, detail="Link is invalid or has expired.")
-
-    # --- Core Logic: Delete the key from Redis immediately ---
-    # This ensures the link works only once.
-    r.delete(link_id)
-
-    # Instead of returning a file, we redirect the user to the Cloudinary URL
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url=file_url)
+# ...

@@ -9,45 +9,62 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
-# --- THIS IS THE FIX ---
-# Define the absolute path to the project's root directory
+# --- Define the absolute path to the project's root directory ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# --- Translation Dictionary ---
+translations = {
+    "app_title": "Lepko",
+    "app_subtitle": "Простые инструменты для простых задач.",
+    "upgrade_link": "Получить Pro",
+    "activate_key": "Активировать ключ",
+    "drop_description": "Быстрая и анонимная передача файлов.",
+    "pad_description": "Общий блокнот между вашими устройствами.",
+    "keys_issued": "Ключей выдано",
+    "files_transferred": "Файлов передано"
+}
 
 # --- Configuration ---
 load_dotenv()
 app = FastAPI()
 
-# Configure Cloudinary using credentials from environment variables
+# (Your Cloudinary and Redis configuration remains the same)
+# ...
 cloudinary.config(
   cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
   api_key = os.getenv("CLOUDINARY_API_KEY"),
   api_secret = os.getenv("CLOUDINARY_API_SECRET"),
   secure = True
 )
-
-# Connect to Redis using the URL from environment variables
 redis_url = os.getenv("REDIS_URL")
 if not redis_url:
     r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 else:
     r = redis.from_url(redis_url, decode_responses=True)
 
-# --- APPLY THE FIX HERE ---
-# Mount static files using the absolute path
+# Mount static files and templates with absolute paths
 app.mount(
     "/static",
     StaticFiles(directory=os.path.join(BASE_DIR, "static")),
     name="static"
 )
-# Point to the templates directory using the absolute path
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
 # --- API Endpoints ---
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    """Serves the main HTML page and passes the translation function."""
+    # Define a simple translation function to be used in the template
+    def t(key: str) -> str:
+        return translations.get(key, key)
+    
+    # Pass the 't' function to the template context
+    return templates.TemplateResponse("index.html", {"request": request, "t": t})
 
+# (The rest of your endpoints for /upload and /file remain the same)
+# ...
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
     upload_result = cloudinary.uploader.upload(file.file, resource_type="auto")

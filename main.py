@@ -67,7 +67,11 @@ async def read_root(request: Request):
 @app.get("/drop", response_class=HTMLResponse)
 async def drop_page(request: Request):
     """Serves the page for uploading files."""
-    return templates.TemplateResponse("drop.html", {"request": request})
+    # Define the translation function needed by the base template
+    def t(key: str) -> str:
+        return translations.get(key, key)
+
+    return templates.TemplateResponse("drop.html", {"request": request, "t": t})
 
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
@@ -88,6 +92,3 @@ async def get_file_redirect(link_id: str):
     """
     file_url = r.get(link_id)
     if not file_url:
-        raise HTTPException(status_code=404, detail="Link is invalid, has been used, or has expired.")
-    r.delete(link_id)
-    return RedirectResponse(url=file_url)

@@ -3,7 +3,7 @@ import uuid
 import redis
 import cloudinary
 import cloudinary.uploader
-from typing import List
+from typing import Dict
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -49,21 +49,26 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
-# --- WebSocket Connection Manager ---
+# --- WebSocket Connection Manager for Rooms ---
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: Dict[str, List[WebSocket]] = {}
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, room_id: str):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        if room_id not in self.active_connections:
+            self.active_connections[room_id] = []
+        self.active_connections[room_id].append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+    def disconnect(self, websocket: WebSocket, room_id: str):
+        self.active_connections[room_id].remove(websocket)
+        if not self.active_connections[room_id]:
+            del self.active_connections[room_id]
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
+    async def broadcast(self, message: str, room_id: str):
+        if room_id in self.active_connections:
+            for connection in self.active_connections[room_id]:
+                await connection.send_text(message)
 
 manager = ConnectionManager()
 
@@ -82,11 +87,18 @@ async def drop_page(request: Request):
         return translations.get(key, key)
     return templates.TemplateResponse("drop.html", {"request": request, "t": t})
 
-@app.get("/pad", response_class=HTMLResponse)
-async def pad_page(request: Request):
+@app.get("/pad")
+async def pad_redirect():
+    """Redirects to a new unique pad room."""
+    room_id = str(uuid.uuid4().hex[:8])
+    return RedirectResponse(url=f"/pad/{room_id}")
+
+@app.get("/pad/{room_id}", response_class=HTMLResponse)
+async def pad_room(request: Request, room_id: str):
+    """Serves the specific shared notepad room."""
     def t(key: str) -> str:
         return translations.get(key, key)
-    return templates.TemplateResponse("pad.html", {"request": request, "t": t})
+    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t})
 
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
@@ -106,12 +118,12 @@ async def get_file_redirect(link_id: str):
     r.delete(link_id)
     return RedirectResponse(url=file_url)
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+@app.websocket("/ws/{room_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: str):
+    await manager.connect(websocket, room_id)
     try:
         while True:
             data = await websocket.receive_text()
-            await manager.broadcast(data)
+            await manager.broadcast(data, room_id)
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        manager.disconnect(websocket, room_id)

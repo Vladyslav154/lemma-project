@@ -1,6 +1,5 @@
 import os
 import uuid
-import redis
 import cloudinary
 import cloudinary.uploader
 import json
@@ -11,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
+import redis.asyncio as redis # ИЗМЕНЕНИЕ: импортируем асинхронную версию
 
 # --- Define the absolute path to the project's root directory ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -44,15 +44,9 @@ redis_url = os.getenv("REDIS_URL")
 
 # --- API Endpoints & WebSocket Logic ---
 
-# Helper function to get a Redis connection
-def get_redis_connection():
-    if not redis_url:
-        return redis.Redis(host='localhost', port=6379, db=0)
-    return redis.from_url(redis_url)
-
 # Mount static files and templates
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -83,7 +77,8 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
     file_url = upload_result.get("secure_url")
     link_id = str(uuid.uuid4().hex[:10])
     r_kv = redis.from_url(redis_url, decode_responses=True)
-    r_kv.setex(link_id, 900, file_url)
+    await r_kv.setex(link_id, 900, file_url)
+    await r_kv.close()
     base_url = str(request.base_url)
     one_time_link = f"{base_url}file/{link_id}"
     return {"download_link": one_time_link}
@@ -91,43 +86,43 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
 @app.get("/file/{link_id}")
 async def get_file_redirect(link_id: str):
     r_kv = redis.from_url(redis_url, decode_responses=True)
-    file_url = r_kv.get(link_id)
+    file_url = await r_kv.get(link_id)
     if not file_url:
         raise HTTPException(status_code=404, detail="Link is invalid, has been used, or has expired.")
-    r_kv.delete(link_id)
+    await r_kv.delete(link_id)
+    await r_kv.close()
     return RedirectResponse(url=file_url)
 
-async def redis_pubsub_reader(websocket: WebSocket, room_id: str):
-    """Listens for messages from Redis and sends them to the client."""
-    while True:
-        try:
-            r_pubsub = get_redis_connection()
-            pubsub = r_pubsub.pubsub()
-            pubsub.subscribe(f"chat:{room_id}")
-            for message in pubsub.listen():
-                if message['type'] == 'message':
-                    await websocket.send_text(message['data'].decode('utf-8'))
-        except redis.exceptions.ConnectionError:
-            print("Redis connection closed. Reconnecting...")
-            await asyncio.sleep(1) # Wait a second before retrying
-        except Exception as e:
-            print(f"An error occurred in pubsub reader: {e}")
-            break
+# --- ИЗМЕНЕНО: Полностью асинхронная логика WebSocket ---
+async def redis_reader(channel: redis.client.PubSub, websocket: WebSocket):
+    """Слушает канал Redis и отправляет сообщения в WebSocket."""
+    async for message in channel.listen():
+        if message['type'] == 'message':
+            await websocket.send_text(message['data'].decode('utf-8'))
+
+async def websocket_reader(websocket: WebSocket, pubsub: redis.client.PubSub, room_id: str):
+    """Принимает сообщения из WebSocket и публикует их в Redis."""
+    async for message in websocket.iter_text():
+        await pubsub.publish(f"chat:{room_id}", message)
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    """Accepts messages from the client and publishes them to Redis."""
     await websocket.accept()
-    r_pub = get_redis_connection()
+    r = redis.from_url(redis_url)
+    pubsub = r.pubsub()
+    await pubsub.subscribe(f"chat:{room_id}")
 
-    # Start the task that listens to Redis
-    pubsub_task = asyncio.create_task(redis_pubsub_reader(websocket, room_id))
+    # Запускаем две задачи, которые работают одновременно
+    consumer_task = asyncio.create_task(redis_reader(pubsub, websocket))
+    producer_task = asyncio.create_task(websocket_reader(websocket, r, room_id))
     
-    try:
-        while True:
-            data = await websocket.receive_text()
-            r_pub.publish(f"chat:{room_id}", data)
-    except WebSocketDisconnect:
-        pubsub_task.cancel()
-    except Exception as e:
-        pubsub_task.cancel()
+    # Ждем, пока одна из задач не завершится (например, при отключении клиента)
+    done, pending = await asyncio.wait(
+        [consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED
+    )
+    # Отменяем оставшиеся задачи
+    for task in pending:
+        task.cancel()
+    
+    await pubsub.close()
+    await r.close()

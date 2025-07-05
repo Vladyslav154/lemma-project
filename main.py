@@ -1,151 +1,84 @@
-import os
-import json
-import secrets
 import redis
-from fastapi import FastAPI, Request, Form, File, UploadFile, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
+import os
+import uuid
+import cloudinary
+import cloudinary.uploader
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.sessions import SessionMiddleware
-from werkzeug.utils import secure_filename
-from werkzeug.security import generate_password_hash, check_password_hash
-from coinbase_commerce.client import Client
+from fastapi.staticfiles import StaticFiles
+from dotenv import load_dotenv
 
-# --- 1. Настройки и константы ---
-app = FastAPI(title="Continent Lepko")
+# --- Configuration ---
 
-# Переменные окружения
-SECRET_KEY = os.getenv('SECRET_KEY', 'default-secret-key')
-COINBASE_API_KEY = os.getenv('COINBASE_API_KEY', 'DEFAULT_KEY')
-REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost')
+# Load environment variables from .env file
+load_dotenv()
 
-# Настройки Drop
-UPLOAD_FOLDER = 'temp_uploads'
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
+app = FastAPI()
 
-# --- 2. Инициализация ---
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Configure Cloudinary using credentials from .env
+cloudinary.config(
+  cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
+  api_key = os.getenv("CLOUDINARY_API_KEY"),
+  api_secret = os.getenv("CLOUDINARY_API_SECRET"),
+  secure = True
+)
+
+# Connect to Redis
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+
+# Mount templates and static files
 templates = Jinja2Templates(directory="templates")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-coinbase_client = Client(api_key=COINBASE_API_KEY)
-redis_client = redis.from_url(REDIS_URL)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
-# --- 3. Логика перевода ---
-TRANSLATIONS = {}
-LANGUAGES = {'en': 'EN', 'ru': 'RU', 'de': 'DE', 'cs': 'CS', 'uk': 'UK'}
-
-def load_translations():
-    # ... (код загрузки переводов остается тот же)
-    lang_dir = os.path.join('static', 'lang')
-    for lang_code in LANGUAGES:
-        file_path = os.path.join(lang_dir, f'{lang_code}.json')
-        if os.path.exists(file_path):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                TRANSLATIONS[lang_code] = json.load(f)
-
-load_translations()
-
-def render(template_name: str, request: Request, context: dict = {}):
-    # ... (код рендеринга остается тот же)
-    lang_code = request.query_params.get('lang', request.session.get('lang', 'en'))
-    if lang_code in LANGUAGES:
-        request.session['lang'] = lang_code
-
-    def t(key: str, **kwargs):
-        text = TRANSLATIONS.get(lang_code, {}).get(key, key)
-        return text.format(**kwargs) if kwargs else text
-
-    full_context = {"request": request, "t": t, "LANGUAGES": LANGUAGES, "current_lang": lang_code, **context}
-    return templates.TemplateResponse(template_name, full_context)
-
-# --- 4. Маршруты ---
+# --- Endpoints (API) ---
 
 @app.get("/", response_class=HTMLResponse)
-async def route_root(request: Request):
-    return render("home.html", request)
+async def read_root(request: Request):
+    """Serves the main HTML page."""
+    return templates.TemplateResponse("index.html", {"request": request})
 
-# --- Drop с валидацией ---
-@app.get("/drop", response_class=HTMLResponse)
-async def route_get_drop(request: Request):
-    return render("drop.html", request, {"error": None})
-
-@app.post("/drop", response_class=HTMLResponse)
-async def route_post_drop(request: Request, file: UploadFile = File(...)):
-    t = render("", request).context['t']
-    # Проверка формата файла
-    file_ext = file.filename.split('.')[-1].lower()
-    if file_ext not in ALLOWED_EXTENSIONS:
-        error = t('drop_error_file_type', allowed_types=", ".join(ALLOWED_EXTENSIONS))
-        return render("drop.html", request, {"error": error})
+@app.post("/upload")
+async def upload_file(request: Request, file: UploadFile = File(...)):
+    """Accepts a file, uploads it to Cloudinary, and creates a one-time link."""
     
-    # Проверка размера файла
-    file.file.seek(0, 2)
-    file_size = file.file.tell()
-    if file_size > MAX_FILE_SIZE:
-        error = t('drop_error_file_size', max_size=f"{MAX_FILE_SIZE / 1024 / 1024:.1f} MB")
-        return render("drop.html", request, {"error": error})
-    file.file.seek(0)
+    try:
+        # Upload the file directly to Cloudinary
+        upload_result = cloudinary.uploader.upload(file.file)
+        # Get the secure URL of the uploaded file
+        file_url = upload_result.get("secure_url")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not upload file to Cloudinary: {e}")
+
+    # Generate a unique ID for our one-time link
+    link_id = str(uuid.uuid4().hex[:8])
+
+    # Save the Cloudinary URL in Redis for 15 minutes (900 seconds)
+    r.setex(link_id, 900, file_url)
     
-    # Сохранение файла
-    filename = secure_filename(file.filename)
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-    with open(file_path, "wb") as buffer:
-        buffer.write(await file.read())
+    # Form the one-time download link for our service
+    base_url = str(request.base_url)
+    one_time_link = f"{base_url}file/{link_id}"
+
+    return {"download_link": one_time_link}
+
+@app.get("/file/{link_id}")
+async def get_file_redirect(link_id: str):
+    """
+    Retrieves the Cloudinary URL from Redis using the one-time ID,
+    deletes the record, and redirects the user to the actual file.
+    """
+    file_url = r.get(link_id)
     
-    download_link = str(request.base_url) + 'uploads/' + filename
-    return HTMLResponse(f'<h1>{t("drop_success_title")}</h1><p>{t("drop_success_message")} <a href="{download_link}">{download_link}</a></p><a href="/drop">{t("drop_success_back_button")}</a>')
+    if not file_url:
+        raise HTTPException(status_code=404, detail="Link is invalid or has expired.")
 
-@app.get("/uploads/{filename}")
-async def route_get_upload(filename: str):
-    return FileResponse(path=os.path.join(UPLOAD_FOLDER, filename), filename=filename)
+    # --- Core Logic: Delete the key from Redis immediately ---
+    # This ensures the link works only once.
+    r.delete(link_id)
 
-# --- Pad с паролями и Redis ---
-@app.get("/pad", response_class=HTMLResponse)
-async def route_get_pad(request: Request):
-    return render("pad.html", request)
-
-@app.post("/pad/create")
-async def route_create_pad_room(request: Request, password: str = Form(...)):
-    room_id = secrets.token_urlsafe(6)
-    hashed_password = generate_password_hash(password)
-    redis_client.setex(f"pad:{room_id}", 3600, hashed_password) # Храним пароль 1 час
-    return RedirectResponse(url=f"/pad/{room_id}", status_code=303)
-
-@app.get("/pad/{room_id}", response_class=HTMLResponse)
-async def route_get_pad_room(request: Request, room_id: str):
-    if not redis_client.exists(f"pad:{room_id}"):
-        raise HTTPException(status_code=404, detail="Room not found or expired")
-    return render("pad_room.html", request, {"room_id": room_id})
-
-@app.post("/pad/{room_id}/enter")
-async def route_enter_pad_room(request: Request, room_id: str, password: str = Form(...)):
-    stored_hash = redis_client.get(f"pad:{room_id}")
-    if stored_hash and check_password_hash(stored_hash.decode(), password):
-        return render("pad_editor.html", request, {"room_id": room_id})
-    return render("pad_room.html", request, {"room_id": room_id, "error": True})
-
-# --- Upgrade и Coinbase ---
-@app.get("/upgrade", response_class=HTMLResponse)
-async def route_get_upgrade(request: Request):
-    return render("upgrade.html", request)
-
-@app.post("/create_charge")
-async def route_create_charge(request: Request):
-    t = render("", request).context['t']
-    charge = coinbase_client.charge.create(
-        name=t('premium_charge_name'),
-        description=t('premium_charge_description'),
-        local_price={'amount': '10.00', 'currency': 'USD'},
-        pricing_type='fixed_price',
-        redirect_url=str(request.base_url) + 'payment_success',
-        cancel_url=str(request.base_url) + 'upgrade'
-    )
-    return RedirectResponse(charge.hosted_url, status_code=303)
-
-@app.get("/payment_success")
-async def route_payment_success(request: Request):
-    t = render("", request).context['t']
-    return HTMLResponse(f"<h1>{t('payment_success_title')}</h1><p>{t('payment_success_message')}</p>")
+    # Instead of returning a file, we redirect the user to the Cloudinary URL
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=file_url)

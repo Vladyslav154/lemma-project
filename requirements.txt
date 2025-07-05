@@ -1,11 +1,7 @@
 fastapi
-uvicorn[standard]
-python-multipart
-aiofiles
-jinja2
+uvicorn
 redis
-starlette
-slowapi
-coinbase-commerce
-itsdangerous
-werkzeug
+python-multipart
+jinja2
+python-dotenv
+cloudinary

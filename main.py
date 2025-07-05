@@ -67,7 +67,6 @@ async def read_root(request: Request):
 @app.get("/drop", response_class=HTMLResponse)
 async def drop_page(request: Request):
     """Serves the page for uploading files."""
-    # Define the translation function needed by the base template
     def t(key: str) -> str:
         return translations.get(key, key)
 
@@ -92,3 +91,9 @@ async def get_file_redirect(link_id: str):
     """
     file_url = r.get(link_id)
     if not file_url:
+        # This block requires indentation
+        raise HTTPException(status_code=404, detail="Link is invalid, has been used, or has expired.")
+    
+    # These lines are outside the 'if' block
+    r.delete(link_id)
+    return RedirectResponse(url=file_url)

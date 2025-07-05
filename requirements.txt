@@ -1,7 +1,6 @@
 fastapi
-uvicorn
+uvicorn[standard]
 redis
-python-multipart
-jinja2
 python-dotenv
 cloudinary
+jinja2

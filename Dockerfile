@@ -10,7 +10,7 @@ COPY requirements.txt .
 # Install the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ИСПРАВЛЕНО: Копируем всё содержимое текущей папки, включая static
+# Copy all project files into the working directory
 COPY . .
 
 # Expose the port the app will run on

@@ -1,65 +1,47 @@
 import os
 import uuid
-import cloudinary
-import cloudinary.uploader
-import json
-import asyncio
 from typing import Dict, List
-from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from dotenv import load_dotenv
-import redis.asyncio as redis
 
-# --- Define the absolute path to the project's root directory ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# --- Translation Dictionary ---
-translations = {
-    "app_title": "Lepko",
-    "app_subtitle": "Простые инструменты для простых задач.",
-    "upgrade_link": "Получить Pro",
-    "activate_key": "Активировать ключ",
-    "drop_description": "Быстрая и анонимная передача файлов.",
-    "pad_description": "Общий блокнот между вашими устройствами.",
-    "keys_issued": "Ключей выдано",
-    "files_transferred": "Файлов передано"
-}
-
-# --- Configuration ---
-load_dotenv()
+# --- Конфигурация без Redis и Cloudinary для теста ---
 app = FastAPI()
 
-# Configure Cloudinary
-cloudinary.config(
-  cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
-  api_key = os.getenv("CLOUDINARY_API_KEY"),
-  api_secret = os.getenv("CLOUDINARY_API_SECRET"),
-  secure = True
-)
-
-# Get Redis URL from environment variables
-redis_url = os.getenv("REDIS_URL")
-
-# Mount static files and templates
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+# --- Простой менеджер подключений (в памяти) ---
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, List[WebSocket]] = {}
 
-# --- API Endpoints ---
+    async def connect(self, websocket: WebSocket, room_id: str):
+        await websocket.accept()
+        if room_id not in self.active_connections:
+            self.active_connections[room_id] = []
+        self.active_connections[room_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, room_id: str):
+        if room_id in self.active_connections and websocket in self.active_connections[room_id]:
+            self.active_connections[room_id].remove(websocket)
+            if not self.active_connections[room_id]:
+                del self.active_connections[room_id]
+
+    async def broadcast(self, message: str, room_id: str):
+        if room_id in self.active_connections:
+            for connection in self.active_connections[room_id]:
+                await connection.send_text(message)
+
+manager = ConnectionManager()
+
+# --- Эндпоинты ---
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    def t(key: str) -> str:
-        return translations.get(key, key)
-    return templates.TemplateResponse("index.html", {"request": request, "t": t})
-
-@app.get("/drop", response_class=HTMLResponse)
-async def drop_page(request: Request):
-    def t(key: str) -> str:
-        return translations.get(key, key)
-    return templates.TemplateResponse("drop.html", {"request": request, "t": t})
+    return templates.TemplateResponse("index.html", {"request": request, "t": lambda k: k})
 
 @app.get("/pad")
 async def pad_redirect():
@@ -68,59 +50,14 @@ async def pad_redirect():
 
 @app.get("/pad/{room_id}", response_class=HTMLResponse)
 async def pad_room(request: Request, room_id: str):
-    def t(key: str) -> str:
-        return translations.get(key, key)
-    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t})
-
-@app.post("/upload")
-async def upload_file(request: Request, file: UploadFile = File(...)):
-    upload_result = cloudinary.uploader.upload(file.file, resource_type="auto")
-    file_url = upload_result.get("secure_url")
-    link_id = str(uuid.uuid4().hex[:10])
-    r_kv = redis.from_url(redis_url, decode_responses=True)
-    await r_kv.setex(link_id, 900, file_url)
-    await r_kv.close()
-    return {"download_link": one_time_link}
-
-@app.get("/file/{link_id}")
-async def get_file_redirect(link_id: str):
-    r_kv = redis.from_url(redis_url, decode_responses=True)
-    file_url = await r_kv.get(link_id)
-    if not file_url:
-        raise HTTPException(status_code=404, detail="Link is invalid, has been used, or has expired.")
-    await r_kv.delete(link_id)
-    await r_kv.close()
-    return RedirectResponse(url=file_url)
-
-# --- ИСПРАВЛЕННАЯ ЛОГИКА WEBSOCKET ---
-async def redis_reader(channel: redis.client.PubSub, websocket: WebSocket):
-    """Слушает Redis и отправляет сообщения клиенту."""
-    while True:
-        message = await channel.get_message(ignore_subscribe_messages=True)
-        if message is not None:
-            await websocket.send_text(message["data"].decode("utf-8"))
+    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": lambda k: k})
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    await websocket.accept()
-    
-    r = redis.from_url(redis_url)
-    pubsub = r.pubsub()
-    channel = f"chat:{room_id}"
-    await pubsub.subscribe(channel)
-
-    # Запускаем задачу, которая слушает Redis и отправляет сообщения в сокет
-    reader_task = asyncio.create_task(redis_reader(pubsub, websocket))
-
+    await manager.connect(websocket, room_id)
     try:
-        # Цикл, который принимает сообщения от клиента и публикует их в Redis
         while True:
             data = await websocket.receive_text()
-            await r.publish(channel, data)
+            await manager.broadcast(data, room_id)
     except WebSocketDisconnect:
-        # Если клиент отключается, отменяем задачу и выходим
-        reader_task.cancel()
-    finally:
-        # Закрываем соединения
-        await pubsub.close()
-        await r.close()
+        manager.disconnect(websocket, room_id)

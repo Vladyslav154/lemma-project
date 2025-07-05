@@ -92,46 +92,35 @@ async def get_file_redirect(link_id: str):
     await r_kv.close()
     return RedirectResponse(url=file_url)
 
-# --- WebSocket Logic with Redis Pub/Sub ---
+# --- ИСПРАВЛЕННАЯ ЛОГИКА WEBSOCKET ---
 async def redis_reader(channel: redis.client.PubSub, websocket: WebSocket):
-    """Listens to a Redis channel and sends messages to the client's WebSocket."""
+    """Слушает Redis и отправляет сообщения клиенту."""
     while True:
-        try:
-            message = await channel.get_message(ignore_subscribe_messages=True, timeout=1.0)
-            if message is not None:
-                await websocket.send_text(message['data'].decode('utf-8'))
-        except asyncio.CancelledError:
-            break
-        except Exception as e:
-            print(f"Redis reader error: {e}")
-            break
-
-async def websocket_reader(websocket: WebSocket, channel: str):
-    """Receives messages from the client's WebSocket and publishes them to Redis."""
-    r = redis.from_url(redis_url)
-    async for message in websocket.iter_text():
-        await r.publish(channel, message)
-    await r.close()
+        message = await channel.get_message(ignore_subscribe_messages=True)
+        if message is not None:
+            await websocket.send_text(message["data"].decode("utf-8"))
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await websocket.accept()
-    channel = f"chat:{room_id}"
+    
     r = redis.from_url(redis_url)
     pubsub = r.pubsub()
+    channel = f"chat:{room_id}"
     await pubsub.subscribe(channel)
 
-    # Start two concurrent tasks
-    consumer_task = asyncio.create_task(redis_reader(pubsub, websocket))
-    producer_task = asyncio.create_task(websocket_reader(websocket, channel))
-    
-    # Wait until one task is done (e.g., client disconnects)
-    done, pending = await asyncio.wait(
-        [consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED
-    )
-    # Cancel any remaining tasks
-    for task in pending:
-        task.cancel()
-    
-    await pubsub.close()
-    await r.close()
+    # Запускаем задачу, которая слушает Redis и отправляет сообщения в сокет
+    reader_task = asyncio.create_task(redis_reader(pubsub, websocket))
+
+    try:
+        # Цикл, который принимает сообщения от клиента и публикует их в Redis
+        while True:
+            data = await websocket.receive_text()
+            await r.publish(channel, data)
+    except WebSocketDisconnect:
+        # Если клиент отключается, отменяем задачу и выходим
+        reader_task.cancel()
+    finally:
+        # Закрываем соединения
+        await pubsub.close()
+        await r.close()

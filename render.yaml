@@ -1,14 +1,9 @@
-# Главный раздел нашего "рецепта"
 services:
-  # Наш единственный веб-сервис
   - type: web
-    # Имя сервиса на платформе Render
     name: lemma-project
-    # Указываем, что среда выполнения - это Docker.
-    # Render будет искать Dockerfile и использовать его.
-    env: docker
-    # Тарифный план
+    env: python
     plan: free
-    # Путь для проверки "здоровья" сервиса. Render будет периодически
-    # делать GET-запрос по этому адресу, чтобы убедиться, что сервис работает.
+    pythonVersion: "3.11"
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port 10000"
     healthCheckPath: /

@@ -1,223 +1,135 @@
-/* =================================================================== */
-/* ==          НОВЫЙ СТИЛЬ "ЦИФРОВОЙ АРТЕФАКТ"                    == */
-/* =================================================================== */
+/* Импорт современного шрифта */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
 
-/* Подключаем шрифты */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Code:wght@400&display=swap');
-
-/* Основные переменные для легкой смены темы */
+/* Переменные для легкой смены цветов */
 :root {
-    --bg-color: #121212; /* Глубокий черный фон */
-    --text-color: #e0e0e0; /* Слегка приглушенный белый текст */
-    --accent-color: #00f5d4; /* Яркий бирюзовый акцент */
-    --secondary-color: #4a4a4a; /* Цвет для границ и второстепенных элементов */
-    --card-bg: #1d1d1d; /* Фон карточек */
+    --bg-color: #121212; /* Очень темный фон */
+    --text-color: #e0e0e0;
+    --primary-color: #00f2ea; /* Дерзкий бирюзовый/неоновый цвет */
+    --secondary-color: #c43ad6; /* Фиолетовый акцент */
+    --surface-color: #1e1e1e; /* Цвет для карточек и форм */
+    --border-color: rgba(0, 242, 234, 0.2);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 body {
     font-family: 'Inter', sans-serif;
     background-color: var(--bg-color);
     color: var(--text-color);
-    margin: 0;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    padding: 2rem;
     text-align: center;
 }
 
-.container {
-    max-width: 800px;
-    padding: 2rem;
-    animation: fadeIn 0.5s ease-in-out;
+h1, h2 {
+    color: #ffffff;
+    font-weight: 700;
 }
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* --- Стили для Главной страницы (home.html) --- */
 
 h1 {
-    font-size: 4rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-    color: var(--accent-color);
-    text-shadow: 0 0 10px rgba(0, 245, 212, 0.3);
+    font-size: 3rem;
+    text-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color);
 }
 
-p.subtitle {
-    font-size: 1.25rem;
-    color: var(--text-color);
+p {
+    margin-top: 0.5rem;
     opacity: 0.8;
-    margin-bottom: 3rem;
 }
 
-.tools-grid {
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: all 0.2s ease-in-out;
+}
+
+a:hover {
+    color: #ffffff;
+    text-shadow: 0 0 5px var(--primary-color);
+}
+
+.home-container, .form-container {
+    max-width: 600px;
+    width: 100%;
+}
+
+.brand-block h1 {
+    margin-bottom: 1rem;
+}
+.brand-block p {
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+}
+.brand-block a {
+    margin: 0 1rem;
+}
+
+.tools-block {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 2rem;
+    margin-top: 4rem;
 }
 
-.tool-card {
-    background-color: var(--card-bg);
-    border: 1px solid var(--secondary-color);
-    border-radius: 0.75rem;
+.tool-link {
+    background-color: var(--surface-color);
     padding: 2rem;
-    text-decoration: none;
-    color: inherit;
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    cursor: pointer;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
 }
 
-.tool-card:hover {
+.tool-link:hover {
     transform: translateY(-5px);
-    box-shadow: 0 0 20px rgba(0, 245, 212, 0.2);
-    border-color: var(--accent-color);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2), 0 0 15px var(--primary-color);
 }
 
-.tool-card h2 {
-    margin-top: 0;
-    font-size: 1.5rem;
-    color: var(--text-color);
-}
-
-.tool-card p {
-    color: var(--text-color);
-    opacity: 0.7;
-    line-height: 1.6;
-}
-
-/* --- Общие стили для инструментов --- */
-
-.home-link {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    text-decoration: none;
-    color: var(--secondary-color);
-    font-weight: 600;
-    transition: color 0.2s;
-}
-.home-link:hover {
-    color: var(--accent-color);
-}
-
-/* --- Стили для Drop --- */
+/* Стили для страницы загрузки */
 #drop-zone {
-    border: 3px dashed var(--secondary-color);
-    border-radius: 1rem;
-    padding: 4rem 2rem;
+    margin-top: 2rem;
+    padding: 3rem;
+    border: 2px dashed var(--border-color);
+    border-radius: 10px;
     cursor: pointer;
-    transition: border-color 0.2s, background-color 0.2s;
-}
-#drop-zone.dragover {
-    border-color: var(--accent-color);
-    background-color: rgba(0, 245, 212, 0.05);
-}
-#drop-zone p {
-    margin: 0;
-    font-size: 1.25rem;
-    color: var(--text-color);
-    opacity: 0.7;
+    transition: all 0.3s ease;
 }
 
-#result-zone {
-    display: none;
-    background-color: var(--card-bg);
-    border: 1px solid var(--secondary-color);
-    border-radius: 0.75rem;
-    padding: 2rem;
-    word-wrap: break-word;
-}
-#result-zone h2 {
-    margin-top: 0;
-}
-#download-link {
-    font-family: 'Fira Code', monospace;
-    background-color: #2a2a2a;
-    padding: 0.5rem 1rem;
-    border-radius: 0.25rem;
-    color: var(--accent-color);
-    text-decoration: none;
-    display: inline-block;
-    margin-bottom: 1rem;
-}
-#copy-button {
-    background-color: var(--accent-color);
-    color: #121212;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 0.5rem;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-#copy-button:hover {
-    background-color: #9affed;
+#drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--primary-color);
+    background-color: rgba(0, 242, 234, 0.05);
 }
 
-/* --- Стили для Pad --- */
-#notepad {
-    font-family: 'Fira Code', monospace;
-    flex-grow: 1;
-    width: 100%;
-    padding: 2rem;
-    font-size: 1rem;
-    line-height: 1.7;
-    border: none;
-    outline: none;
-    resize: none;
-    background-color: #1a1a1a;
-    color: var(--text-color);
-    box-sizing: border-box;
-}
-.status-bar {
-    background-color: #000;
-    color: var(--secondary-color);
-    padding: 0.5rem 2rem;
-    font-size: 0.9rem;
-    font-family: 'Inter', sans-serif;
-    text-align: right;
-}
-
-/* --- Стили для QR --- */
-.qr-container {
+.link-wrapper {
     display: flex;
-    gap: 2rem;
-    align-items: flex-start;
-}
-#qr-input {
-    width: 100%;
-    min-height: 200px;
-    background-color: var(--card-bg);
-    border: 1px solid var(--secondary-color);
-    color: var(--text-color);
-    padding: 1rem;
-    border-radius: 0.5rem;
-    font-family: 'Fira Code', monospace;
-    resize: vertical;
-}
-#qrcode-container {
-    padding: 1rem;
-    background-color: white;
-    border-radius: 0.5rem;
-}
-#qrcode-container canvas {
-    display: block;
+    margin-top: 1rem;
 }
 
-/* Медиа-запросы для мобильных */
-@media (max-width: 768px) {
-    .tools-grid {
-        grid-template-columns: 1fr;
-    }
-    h1 {
-        font-size: 2.5rem;
-    }
-    .qr-container {
-        flex-direction: column;
-    }
+#download-link {
+    flex-grow: 1;
+    padding: 0.8rem;
+    border-radius: 5px 0 0 5px;
+    border: 1px solid var(--primary-color);
+    background-color: var(--surface-color);
+    color: var(--text-color);
+}
+
+#copy-button {
+    padding: 0.8rem 1.5rem;
+    border: none;
+    background-color: var(--primary-color);
+    color: #000;
+    font-weight: 700;
+    border-radius: 0 5px 5px 0;
+    cursor: pointer;
+}
+
+.hidden {
+    display: none;
 }

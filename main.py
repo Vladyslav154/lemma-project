@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
-import redis.asyncio as redis # ИЗМЕНЕНИЕ: импортируем асинхронную версию
+import redis.asyncio as redis
 
 # --- Define the absolute path to the project's root directory ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -42,11 +42,12 @@ cloudinary.config(
 # Get Redis URL from environment variables
 redis_url = os.getenv("REDIS_URL")
 
-# --- API Endpoints & WebSocket Logic ---
-
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+
+# --- API Endpoints ---
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -79,8 +80,6 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
     r_kv = redis.from_url(redis_url, decode_responses=True)
     await r_kv.setex(link_id, 900, file_url)
     await r_kv.close()
-    base_url = str(request.base_url)
-    one_time_link = f"{base_url}file/{link_id}"
     return {"download_link": one_time_link}
 
 @app.get("/file/{link_id}")
@@ -93,34 +92,44 @@ async def get_file_redirect(link_id: str):
     await r_kv.close()
     return RedirectResponse(url=file_url)
 
-# --- ИЗМЕНЕНО: Полностью асинхронная логика WebSocket ---
+# --- WebSocket Logic with Redis Pub/Sub ---
 async def redis_reader(channel: redis.client.PubSub, websocket: WebSocket):
-    """Слушает канал Redis и отправляет сообщения в WebSocket."""
-    async for message in channel.listen():
-        if message['type'] == 'message':
-            await websocket.send_text(message['data'].decode('utf-8'))
+    """Listens to a Redis channel and sends messages to the client's WebSocket."""
+    while True:
+        try:
+            message = await channel.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            if message is not None:
+                await websocket.send_text(message['data'].decode('utf-8'))
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"Redis reader error: {e}")
+            break
 
-async def websocket_reader(websocket: WebSocket, pubsub: redis.client.PubSub, room_id: str):
-    """Принимает сообщения из WebSocket и публикует их в Redis."""
+async def websocket_reader(websocket: WebSocket, channel: str):
+    """Receives messages from the client's WebSocket and publishes them to Redis."""
+    r = redis.from_url(redis_url)
     async for message in websocket.iter_text():
-        await pubsub.publish(f"chat:{room_id}", message)
+        await r.publish(channel, message)
+    await r.close()
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await websocket.accept()
+    channel = f"chat:{room_id}"
     r = redis.from_url(redis_url)
     pubsub = r.pubsub()
-    await pubsub.subscribe(f"chat:{room_id}")
+    await pubsub.subscribe(channel)
 
-    # Запускаем две задачи, которые работают одновременно
+    # Start two concurrent tasks
     consumer_task = asyncio.create_task(redis_reader(pubsub, websocket))
-    producer_task = asyncio.create_task(websocket_reader(websocket, r, room_id))
+    producer_task = asyncio.create_task(websocket_reader(websocket, channel))
     
-    # Ждем, пока одна из задач не завершится (например, при отключении клиента)
+    # Wait until one task is done (e.g., client disconnects)
     done, pending = await asyncio.wait(
         [consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED
     )
-    # Отменяем оставшиеся задачи
+    # Cancel any remaining tasks
     for task in pending:
         task.cancel()
     

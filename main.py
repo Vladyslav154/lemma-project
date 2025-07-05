@@ -3,13 +3,15 @@ import uuid
 import redis
 import cloudinary
 import cloudinary.uploader
-from fastapi import FastAPI, File, UploadFile, Request, HTTPException
+from typing import List
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
-# --- УДАЛЕНА ЛОГИКА С АБСОЛЮТНЫМИ ПУТЯМИ ---
+# --- Define the absolute path to the project's root directory ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # --- Translation Dictionary ---
 translations = {
@@ -42,9 +44,28 @@ if not redis_url:
 else:
     r = redis.from_url(redis_url, decode_responses=True)
 
-# --- ИЗМЕНЕНО: Простое монтирование ---
+# Mount static files and templates with absolute paths
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+
+# --- WebSocket Connection Manager ---
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+manager = ConnectionManager()
 
 
 # --- API Endpoints ---
@@ -84,3 +105,13 @@ async def get_file_redirect(link_id: str):
         raise HTTPException(status_code=404, detail="Link is invalid, has been used, or has expired.")
     r.delete(link_id)
     return RedirectResponse(url=file_url)
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await manager.broadcast(data)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)

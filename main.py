@@ -72,6 +72,14 @@ async def drop_page(request: Request):
 
     return templates.TemplateResponse("drop.html", {"request": request, "t": t})
 
+@app.get("/pad", response_class=HTMLResponse)
+async def pad_page(request: Request):
+    """Serves the shared notepad page."""
+    def t(key: str) -> str:
+        return translations.get(key, key)
+    
+    return templates.TemplateResponse("pad.html", {"request": request, "t": t})
+
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
     """Accepts a file, uploads it to Cloudinary, and creates a one-time link."""
@@ -91,9 +99,7 @@ async def get_file_redirect(link_id: str):
     """
     file_url = r.get(link_id)
     if not file_url:
-        # This block requires indentation
         raise HTTPException(status_code=404, detail="Link is invalid, has been used, or has expired.")
     
-    # These lines are outside the 'if' block
     r.delete(link_id)
     return RedirectResponse(url=file_url)

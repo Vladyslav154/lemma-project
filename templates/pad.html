@@ -1,9 +1,23 @@
 {% extends "base.html" %}
+
 {% block content %}
-<h1>{{ t('pad_title') }}</h1>
-<p>{{ t('pad_create_instruction') }}</p>
-<form action="/pad/create" method="post">
-    <input type="password" name="password" placeholder="{{ t('pad_password_placeholder') }}" required>
-    <button type="submit">{{ t('pad_create_button') }}</button>
-</form>
+<div class="form-container">
+    <h1>Общий блокнот</h1>
+    <p>Текст здесь будет доступен всем, кто зайдет на эту страницу. Он автоматически синхронизируется между устройствами.</p>
+    <textarea id="pad-textarea" placeholder="Начните печатать..."></textarea>
+</div>
+<style>
+    #pad-textarea {
+        width: 100%;
+        height: 60vh;
+        margin-top: 2rem;
+        background-color: var(--surface-color);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 1rem;
+        font-size: 1rem;
+        font-family: 'Inter', sans-serif;
+    }
+</style>
 {% endblock %}

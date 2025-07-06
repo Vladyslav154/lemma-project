@@ -3,8 +3,7 @@ import uuid
 import json
 import asyncio
 from typing import Dict, List
-# ИЗМЕНЕНИЕ: Добавлены 'File' и 'UploadFile' обратно
-from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -32,7 +31,11 @@ templates = Jinja2Templates(directory="templates")
 
 translations = { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами."}
 
-# --- Менеджер подключений с логикой паролей ---
+# --- Настройки безопасности для файлов ---
+MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx", ".zip", ".rar"}
+
+# --- Менеджер подключений чата ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
@@ -100,12 +103,34 @@ async def pad_room(request: Request, room_id: str):
 
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
+    # --- ПРОВЕРКА ТИПА ФАЙЛА ---
+    file_extension = os.path.splitext(file.filename)[1].lower()
+    if file_extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Недопустимый тип файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}")
+
+    # --- ПРОВЕРКА РАЗМЕРА ФАЙЛА ---
+    # Читаем файл по частям, чтобы не переполнять память
+    real_file_size = 0
+    for chunk in file.file:
+        real_file_size += len(chunk)
+        if real_file_size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // 1024 // 1024}MB")
+    
+    # Возвращаемся в начало файла для загрузки в Cloudinary
+    await file.seek(0)
+
+    # Загрузка в Cloudinary
     upload_result = cloudinary.uploader.upload(file.file, resource_type="auto")
     file_url = upload_result.get("secure_url")
     link_id = str(uuid.uuid4().hex[:10])
+    
+    # Сохранение ссылки в Redis
     r_kv = redis.from_url(redis_url, decode_responses=True)
     await r_kv.setex(link_id, 900, file_url)
     await r_kv.close()
+    
+    base_url = str(request.base_url)
+    one_time_link = f"{base_url}file/{link_id}"
     return {"download_link": one_time_link}
 
 @app.get("/file/{link_id}")

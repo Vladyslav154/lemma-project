@@ -1,7 +1,7 @@
 {
   "name": "Lepko",
   "short_name": "Lepko",
-  "start_url": "/",
+  "start_url": "/?lang=ru",
   "display": "standalone",
   "background_color": "#0d1117",
   "theme_color": "#58a6ff",

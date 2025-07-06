@@ -4,3 +4,4 @@ python-dotenv
 cloudinary
 jinja2
 python-multipart
+redis

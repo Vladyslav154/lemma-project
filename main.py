@@ -31,8 +31,8 @@ templates = Jinja2Templates(directory="templates")
 
 # --- Словарь переводов ---
 translations = {
-    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами.", "home_button": "Домой"},
-    "en": { "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_description": "Fast and anonymous file transfer.", "pad_description": "A shared notepad between your devices.", "home_button": "Home"}
+    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_title": "Drop", "drop_description": "Быстрая и анонимная передача файлов.", "pad_title": "Pad", "pad_description": "Общий блокнот между вашими устройствами.", "home_button": "Домой"},
+    "en": { "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_title": "Drop", "drop_description": "Fast and anonymous file transfer.", "pad_title": "Pad", "pad_description": "A shared notepad between your devices.", "home_button": "Home"}
 }
 
 # --- Менеджер подключений чата ---
@@ -68,17 +68,17 @@ async def read_root(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
 
-# --- НОВЫЙ ЭНДПОИНТ ДЛЯ ВХОДА ПО ОДНОРАЗОВОЙ ССЫЛКЕ ---
-@app.get("/join/{pulse_id}")
-async def join_via_link(pulse_id: str, lang: str = Query("ru", regex="ru|en")):
-    r = redis.from_url(redis_url, decode_responses=True)
-    room_id = await r.get(f"pulse:{pulse_id}")
-    if not room_id:
-        raise HTTPException(status_code=404, detail="Invite link is invalid or has expired.")
-    await r.delete(f"pulse:{pulse_id}") # Ссылка "сгорает" после использования
-    await r.close()
-    # Перенаправляем пользователя в комнату
+# --- ВОЗВРАЩАЕМ СТАРЫЕ ЭНДПОИНТЫ ДЛЯ ЧАТА ---
+@app.get("/pad")
+async def pad_redirect(lang: str = Query("ru", regex="ru|en")):
+    room_id = str(uuid.uuid4().hex[:8])
     return RedirectResponse(url=f"/pad/{room_id}?lang={lang}")
+
+@app.get("/pad/{room_id}", response_class=HTMLResponse)
+async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex="ru|en")):
+    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
+    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
+
 
 # --- API ЭНДПОИНТЫ ДЛЯ "РУКОПОЖАТИЯ" ---
 @app.post("/api/pulse/create/{room_id}")
@@ -95,17 +95,3 @@ async def join_by_pulse(request: PulseRequest):
     room_id = await r.get(f"pulse:{request.pulse_id}")
     if not room_id:
         raise HTTPException(status_code=404, detail="Pulse not found or expired.")
-    await r.delete(f"pulse:{request.pulse_id}")
-    await r.close()
-    return {"room_id": room_id}
-
-# --- WebSocket эндпоинт (упрощенный, без пароля) ---
-@app.websocket("/ws/{room_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    await manager.connect(websocket, room_id)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await manager.broadcast(data, room_id)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, room_id)

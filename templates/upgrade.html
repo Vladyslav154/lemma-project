@@ -1,69 +1,89 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upgrade - Lepko</title>
-    <link rel="stylesheet" href="/static/styles.css">
-    <style>
-        .plan { border: 1px solid rgba(0, 255, 255, 0.3); padding: 25px; margin-bottom: 20px; border-radius: 4px; text-align: left;}
-        .plan ul { list-style: none; padding-left: 0; }
-        .plan li { margin-bottom: 10px; }
-        .plan li::before { content: '✓'; color: #00ffff; margin-right: 10px; }
-        .plan-header { text-align: center; }
-        .plan-header p { font-size: 24px; font-weight: bold; }
-        .plan-button-wrapper { text-align: center; margin-top: 20px; }
-        #key-display { margin-top: 30px; padding: 20px; background-color: #1a1a1a; border: 1px solid #00ffff; border-radius: 4px; display: none; }
-        #access-key { font-size: 14px; color: #00ffff; word-wrap: break-word; }
-        .trial-section { text-align: center; margin: 40px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1 data-i18n-key="upgrade_page_title"></h1>
-        <p data-i18n-key="upgrade_page_subtitle" style="text-align: center;"></p>
-        <div class="plan">
-            <div class="plan-header">
-                <h2 data-i18n-key="monthly_plan"></h2>
-                <p>$14</p>
-            </div>
-            <ul>
-                <li data-i18n-key="premium_feature_1"></li>
-                <li data-i18n-key="premium_feature_2"></li>
-            </ul>
-            <div class="plan-button-wrapper">
-                <button id="monthly-btn" data-i18n-key="get_key_button"></button>
-            </div>
-        </div>
-        <div class="plan">
-             <div class="plan-header">
-                <h2 data-i18n-key="yearly_plan"></h2>
-                <p>$110 (<span data-i18n-key="yearly_plan_promo"></span>)</p>
-            </div>
-            <ul>
-                <li data-i18n-key="premium_feature_1"></li>
-                <li data-i18n-key="premium_feature_2"></li>
-                <li data-i18n-key="premium_feature_3"></li>
-                <li data-i18n-key="premium_feature_4"></li>
-            </ul>
-             <div class="plan-button-wrapper">
-                <button id="yearly-btn" data-i18n-key="get_key_button"></button>
-            </div>
-        </div>
+{% extends "base.html" %}
 
-        <div class="trial-section">
-            <button id="trial-btn" data-i18n-key="get_trial_button"></button>
-        </div>
+{% block content %}
+<div class="form-container">
+    <h1>Lepko Pro</h1>
+    <p>Получите доступ к расширенным функциям и поддержите проект.</p>
 
-        <div id="key-display">
-            <h4 data-i18n-key="your_new_key"></h4>
-            <p data-i18n-key="we_cant_recover"></p>
-            <code id="access-key"></code>
-        </div>
-        
-        <a href="/" class="home-link" style="text-align: center; display: block;">Вернуться на главную</a>
+    <div class="pro-features">
+        <h3>Что вы получаете:</h3>
+        <ul>
+            <li>✅ Увеличенный лимит на размер файла до 100 МБ</li>
+            <li>✅ Более долгое время жизни ссылок (24 часа)</li>
+            <li>✅ Приоритетная поддержка</li>
+            <li>✅ Ваша поддержка помогает нам оставаться независимыми</li>
+        </ul>
     </div>
-    <script src="/static/upgrade.js"></script>
-    <script src="/static/i18n.js"></script> 
-</body>
-</html>
+
+    <div class="payment-instructions">
+        <h3>Как получить Pro:</h3>
+        <p>Для сохранения полной анонимности мы принимаем оплату только в криптовалюте Monero (XMR).</p>
+        <ol>
+            <li>Отправьте <strong>0.1 XMR</strong> на этот адрес:</li>
+            <li class="wallet-address">44x3A3rWf4zB7a... (здесь будет ваш полный Monero адрес)</li>
+            <li>После отправки, вставьте ID вашей транзакции в поле ниже для верификации.</li>
+        </ol>
+
+        <form id="payment-form" class="chat-form">
+            <input type="text" id="txn-id" placeholder="ID транзакции (TxID)">
+            <button type="submit" class="button">Проверить платеж</button>
+        </form>
+        <p id="payment-status"></p>
+    </div>
+</div>
+
+<style>
+    .pro-features {
+        text-align: left;
+        margin: 2rem 0;
+        padding: 1.5rem;
+        background: rgba(0, 242, 234, 0.05);
+        border-radius: 8px;
+    }
+    .pro-features h3 {
+        margin-bottom: 1rem;
+    }
+    .pro-features ul {
+        list-style: none;
+    }
+    .pro-features ul li {
+        margin-bottom: 0.5rem;
+    }
+    .payment-instructions {
+        margin-top: 2rem;
+        text-align: left;
+    }
+    .wallet-address {
+        background: #000;
+        padding: 1rem;
+        border-radius: 6px;
+        font-family: monospace;
+        word-wrap: break-word;
+        margin: 1rem 0;
+    }
+</style>
+
+<script>
+    document.getElementById('payment-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const txnId = document.getElementById('txn-id').value;
+        const statusEl = document.getElementById('payment-status');
+
+        if (!txnId) {
+            statusEl.textContent = "Пожалуйста, введите ID транзакции.";
+            statusEl.style.color = "#ff7b72";
+            return;
+        }
+
+        statusEl.textContent = "Проверяем платеж...";
+        statusEl.style.color = "var(--primary-color)";
+
+        // Здесь будет логика для отправки TxID на ваш сервер для проверки
+        // Временно мы просто показываем сообщение об успехе через 2 секунды
+        setTimeout(() => {
+            statusEl.textContent = "Платеж подтвержден! Ваш Pro ключ: " + Math.random().toString(36).substr(2, 16).toUpperCase();
+            statusEl.style.color = "#28a745";
+        }, 2000);
+    });
+</script>
+{% endblock %}

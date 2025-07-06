@@ -39,11 +39,12 @@ translations = {
 MAX_FILE_SIZE = 25 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx", ".zip", ".rar"}
 
-# --- ИЗМЕНЕНИЕ: Хранилище ссылок в памяти вместо Redis ---
-file_links = {} # { "link_id": {"url": "...", "timestamp": ...} }
+# --- Хранилище ссылок в памяти ---
+file_links = {}
 
 # --- Менеджер подключений чата ---
 class ConnectionManager:
+    # ... (код ConnectionManager без изменений)
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
         self.room_passwords: Dict[str, str] = {}
@@ -83,19 +84,26 @@ async def read_root(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
 
-# ... (остальные GET эндпоинты без изменений)
 @app.get("/drop", response_class=HTMLResponse)
 async def drop_page(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("drop.html", {"request": request, "t": t, "lang": lang})
+
 @app.get("/pad")
 async def pad_redirect(lang: str = Query("ru", regex="ru|en")):
     room_id = str(uuid.uuid4().hex[:8])
     return RedirectResponse(url=f"/pad/{room_id}?lang={lang}")
+
 @app.get("/pad/{room_id}", response_class=HTMLResponse)
 async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
+
+# --- НОВЫЙ ЭНДПОИНТ ---
+@app.get("/upgrade", response_class=HTMLResponse)
+async def upgrade_page(request: Request, lang: str = Query("ru", regex="ru|en")):
+    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
+    return templates.TemplateResponse("upgrade.html", {"request": request, "t": t, "lang": lang})
 
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
@@ -115,7 +123,6 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="Ошибка при загрузке файла в облако.")
 
     link_id = str(uuid.uuid4().hex[:10])
-    # ИЗМЕНЕНИЕ: Сохраняем в словарь в памяти
     file_links[link_id] = {"url": file_url, "timestamp": time.time()}
     
     base_url = str(request.base_url).rstrip('/')
@@ -124,13 +131,9 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
 
 @app.get("/file/{link_id}")
 async def get_file_redirect(link_id: str):
-    # ИЗМЕНЕНИЕ: Ищем ссылку в словаре в памяти
-    link_info = file_links.pop(link_id, None) # Извлекаем и удаляем
-    
-    # Проверяем, существует ли ссылка и не истек ли ее срок (15 минут)
+    link_info = file_links.pop(link_id, None)
     if not link_info or (time.time() - link_info["timestamp"]) > 900:
         raise HTTPException(status_code=404, detail="Link is invalid or has expired.")
-    
     return RedirectResponse(url=link_info["url"])
 
 @app.websocket("/ws/{room_id}")

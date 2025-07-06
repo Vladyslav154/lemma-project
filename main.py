@@ -3,7 +3,7 @@ import uuid
 import json
 import asyncio
 from typing import Dict, List
-from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect, Path
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -29,30 +29,44 @@ cloudinary.config(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-translations = { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами."}
+# --- ИЗМЕНЕНИЕ: Словарь переводов стал вложенным ---
+translations = {
+    "ru": {
+        "app_title": "Lepko",
+        "app_subtitle": "Простые инструменты для простых задач.",
+        "upgrade_link": "Получить Pro",
+        "activate_key": "Активировать ключ",
+        "drop_description": "Быстрая и анонимная передача файлов.",
+        "pad_description": "Общий блокнот между вашими устройствами."
+    },
+    "en": {
+        "app_title": "Lepko",
+        "app_subtitle": "Simple tools for simple tasks.",
+        "upgrade_link": "Get Pro",
+        "activate_key": "Activate Key",
+        "drop_description": "Fast and anonymous file transfer.",
+        "pad_description": "A shared notepad between your devices."
+    }
+}
 
 # --- Настройки безопасности для файлов ---
-MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
+MAX_FILE_SIZE = 25 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx", ".zip", ".rar"}
 
 # --- Менеджер подключений чата ---
 class ConnectionManager:
+    # ... (код ConnectionManager остается без изменений)
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
         self.room_passwords: Dict[str, str] = {}
-
     async def connect(self, websocket: WebSocket, room_id: str):
         await websocket.accept()
-        if room_id in self.room_passwords:
-            await websocket.send_text(json.dumps({"type": "auth_required", "action": "enter"}))
-        else:
-            await websocket.send_text(json.dumps({"type": "auth_required", "action": "set"}))
-
+        if room_id in self.room_passwords: await websocket.send_text(json.dumps({"type": "auth_required", "action": "enter"}))
+        else: await websocket.send_text(json.dumps({"type": "auth_required", "action": "set"}))
     async def auth_and_join(self, websocket: WebSocket, room_id: str, password: str):
         if room_id not in self.room_passwords:
             self.room_passwords[room_id] = password
-            if room_id not in self.active_connections:
-                self.active_connections[room_id] = []
+            if room_id not in self.active_connections: self.active_connections[room_id] = []
             self.active_connections[room_id].append(websocket)
             await websocket.send_text(json.dumps({"type": "auth_success", "message": "Пароль установлен."}))
             return True
@@ -63,64 +77,61 @@ class ConnectionManager:
         else:
             await websocket.send_text(json.dumps({"type": "auth_fail", "message": "Неверный пароль."}))
             return False
-
     def disconnect(self, websocket: WebSocket, room_id: str):
         if room_id in self.active_connections and websocket in self.active_connections[room_id]:
             self.active_connections[room_id].remove(websocket)
             if not self.active_connections[room_id]:
                 del self.active_connections[room_id]
-                if room_id in self.room_passwords:
-                    del self.room_passwords[room_id]
-
+                if room_id in self.room_passwords: del self.room_passwords[room_id]
     async def broadcast(self, message: str, room_id: str, sender: WebSocket):
         if room_id in self.active_connections:
             for connection in self.active_connections[room_id]:
-                if connection != sender:
-                    await connection.send_text(message)
-
+                if connection != sender: await connection.send_text(message)
 manager = ConnectionManager()
 
 # --- Эндпоинты ---
-@app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    def t(key: str) -> str: return translations.get(key, key)
-    return templates.TemplateResponse("index.html", {"request": request, "t": t})
+# Редирект с корня на язык по умолчанию (русский)
+@app.get("/")
+async def root_redirect():
+    return RedirectResponse(url="/ru")
 
-@app.get("/drop", response_class=HTMLResponse)
-async def drop_page(request: Request):
-    def t(key: str) -> str: return translations.get(key, key)
-    return templates.TemplateResponse("drop.html", {"request": request, "t": t})
+# ИЗМЕНЕНИЕ: Все эндпоинты теперь включают {lang}
+@app.get("/{lang}", response_class=HTMLResponse)
+async def read_root(request: Request, lang: str = Path("ru", regex="ru|en")):
+    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
+    return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
 
-@app.get("/pad")
-async def pad_redirect():
+@app.get("/{lang}/drop", response_class=HTMLResponse)
+async def drop_page(request: Request, lang: str = Path("ru", regex="ru|en")):
+    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
+    return templates.TemplateResponse("drop.html", {"request": request, "t": t, "lang": lang})
+
+@app.get("/{lang}/pad")
+async def pad_redirect_lang(lang: str = Path("ru", regex="ru|en")):
     room_id = str(uuid.uuid4().hex[:8])
-    return RedirectResponse(url=f"/pad/{room_id}")
+    return RedirectResponse(url=f"/{lang}/pad/{room_id}")
 
-@app.get("/pad/{room_id}", response_class=HTMLResponse)
-async def pad_room(request: Request, room_id: str):
-    def t(key: str) -> str: return translations.get(key, key)
-    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t})
+@app.get("/{lang}/pad/{room_id}", response_class=HTMLResponse)
+async def pad_room(request: Request, room_id: str, lang: str = Path("ru", regex="ru|en")):
+    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
+    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
 
-# ИСПРАВЛЕНО: Возвращен декоратор '@app.post'
+# Эндпоинты API остаются без {lang} префикса для простоты
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Недопустимый тип файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}")
-    
     contents = await file.read()
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // 1024 // 1024}MB")
-    
     upload_result = cloudinary.uploader.upload(contents, resource_type="auto")
     file_url = upload_result.get("secure_url")
     link_id = str(uuid.uuid4().hex[:10])
-    
     r_kv = redis.from_url(redis_url, decode_responses=True)
     await r_kv.setex(link_id, 900, file_url)
     await r_kv.close()
-    
-    base_url = str(request.base_url)
+    base_url = str(request.base_url).replace('/ru', '').replace('/en', '') # Очищаем URL
     one_time_link = f"{base_url}file/{link_id}"
     return {"download_link": one_time_link}
 
@@ -146,7 +157,6 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
         else:
             await websocket.close()
             return
-
         while True:
             data = await websocket.receive_text()
             await manager.broadcast(data, room_id, websocket)

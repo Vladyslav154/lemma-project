@@ -3,25 +3,83 @@
 {% block content %}
 <div class="form-container">
     <div id="upload-container">
-        <h1>Приватная передача файлов</h1>
-        <p>Ссылка сработает один раз и исчезнет через 15 минут.</p>
+        <h1>{{ t('drop_page_title') }}</h1>
+        <p>{{ t('drop_page_subtitle') }}</p>
         <div id="drop-zone">
-            <p>Перетащите файл сюда или кликните для выбора</p>
+            <p>{{ t('drop_zone_text') }}</p>
             <input type="file" id="file-input" hidden>
         </div>
         <div id="progress-container" class="hidden">
-            <p>Загрузка...</p>
+            <p>{{ t('uploading_text') }}</p>
         </div>
     </div>
     <div id="result-container" class="hidden">
-        <h2>Ваш файл готов к отправке!</h2>
+        <h2>{{ t('ready_text') }}</h2>
         <div class="link-wrapper">
             <input type="text" id="download-link" readonly>
-            <button id="copy-button">Копировать</button>
+            <button id="copy-button">{{ t('copy_button') }}</button>
         </div>
-        <p class="small-text">Эта ссылка сработает только один раз.</p>
-        <a href="/drop">Отправить еще один файл</a>
+        <p class="small-text">{{ t('one_time_link_text') }}</p>
+        <a href="/drop?lang={{ lang }}">{{ t('send_another_file') }}</a>
     </div>
 </div>
-<script src="/static/script.js"></script>
+<script>
+    // Этот JS код для работы загрузки файлов остается без изменений
+    document.addEventListener('DOMContentLoaded', () => {
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const uploadContainer = document.getElementById('upload-container');
+        const resultContainer = document.getElementById('result-container');
+        const downloadLinkInput = document.getElementById('download-link');
+        const copyButton = document.getElementById('copy-button');
+        const progressContainer = document.getElementById('progress-container');
+        const originalCopyText = "{{ t('copy_button') }}";
+        const copiedText = "{{ t('copied_button') }}";
+
+        if(dropZone) dropZone.addEventListener('click', () => fileInput.click());
+
+        function handleFile(file) {
+            uploadContainer.style.display = 'none';
+            progressContainer.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload', { method: 'POST', body: formData })
+            .then(response => {
+                if (!response.ok) { throw new Error('Network response was not ok'); }
+                return response.json();
+            })
+            .then(data => {
+                if (data.download_link) {
+                    progressContainer.classList.add('hidden');
+                    resultContainer.classList.remove('hidden');
+                    downloadLinkInput.value = data.download_link;
+                } else { throw new Error(data.detail || 'Failed to get link.'); }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Произошла ошибка: ' + error.message);
+                uploadContainer.style.display = 'block';
+                progressContainer.classList.add('hidden');
+            });
+        }
+        
+        if(dropZone) {
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+            dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('drag-over'); });
+            dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); const files = e.dataTransfer.files; if (files.length > 0) { handleFile(files[0]); }});
+        }
+
+        if(fileInput) fileInput.addEventListener('change', () => { if (fileInput.files.length > 0) { handleFile(fileInput.files[0]); }});
+        
+        if(copyButton) copyButton.addEventListener('click', () => {
+            downloadLinkInput.select();
+            document.execCommand('copy');
+            copyButton.textContent = copiedText;
+            setTimeout(() => { copyButton.textContent = originalCopyText; }, 2000);
+        });
+    });
+</script>
 {% endblock %}

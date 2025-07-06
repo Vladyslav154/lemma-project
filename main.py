@@ -31,70 +31,8 @@ templates = Jinja2Templates(directory="templates")
 
 # --- Словарь переводов ---
 translations = {
-    "ru": {
-        "app_title": "Lepko",
-        "app_subtitle": "Простые инструменты для простых задач.",
-        "upgrade_link": "Получить Pro",
-        "activate_key": "Активировать ключ",
-        "drop_title": "Drop",
-        "drop_description": "Быстрая и анонимная передача файлов.",
-        "pad_title": "Pad",
-        "pad_description": "Общий блокнот между вашими устройствами.",
-        "keys_issued": "Ключей выдано",
-        "files_transferred": "Файлов передано",
-        "drop_page_title": "Приватная передача файлов",
-        "drop_page_subtitle": "Ссылка сработает один раз и исчезнет через 15 минут.",
-        "drop_zone_text": "Перетащите файл сюда или кликните для выбора",
-        "uploading_text": "Загрузка...",
-        "ready_text": "Ваш файл готов к отправке!",
-        "copy_button": "Копировать",
-        "one_time_link_text": "Эта ссылка сработает только один раз.",
-        "send_another_file": "Отправить еще один файл",
-        "pad_page_title": "Анонимный чат",
-        "pad_room_subtitle": "Вы в комнате:",
-        "pad_disclaimer": "Сообщения исчезают. Ничего не сохраняется.",
-        "message_placeholder": "Введите сообщение...",
-        "password_set_title": "Установить пароль для комнаты",
-        "password_set_subtitle": "Первый вошедший задает пароль.",
-        "password_enter_title": "Комната защищена",
-        "password_enter_subtitle": "Введите пароль для входа.",
-        "password_placeholder": "Введите пароль...",
-        "enter_button": "Войти",
-        "copied_button": "Скопировано!",
-        "home_button": "Домой"
-    },
-    "en": {
-        "app_title": "Lepko",
-        "app_subtitle": "Simple tools for simple tasks.",
-        "upgrade_link": "Get Pro",
-        "activate_key": "Activate Key",
-        "drop_title": "Drop",
-        "drop_description": "Fast and anonymous file transfer.",
-        "pad_title": "Pad",
-        "pad_description": "A shared notepad between your devices.",
-        "keys_issued": "Keys issued",
-        "files_transferred": "Files transferred",
-        "drop_page_title": "Private File Transfer",
-        "drop_page_subtitle": "The link will work once and expire in 15 minutes.",
-        "drop_zone_text": "Drag and drop a file here or click to select",
-        "uploading_text": "Uploading...",
-        "ready_text": "Your file is ready to be sent!",
-        "copy_button": "Copy",
-        "one_time_link_text": "This link will only work once.",
-        "send_another_file": "Send another file",
-        "pad_page_title": "Anonymous Chat",
-        "pad_room_subtitle": "You are in room:",
-        "pad_disclaimer": "Messages disappear. Nothing is saved.",
-        "message_placeholder": "Enter a message...",
-        "password_set_title": "Set a password for the room",
-        "password_set_subtitle": "The first user to enter sets the password.",
-        "password_enter_title": "Room is Protected",
-        "password_enter_subtitle": "Enter the password to join.",
-        "password_placeholder": "Enter password...",
-        "enter_button": "Enter",
-        "copied_button": "Copied!",
-        "home_button": "Home"
-    }
+    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами.", "keys_issued": "Ключей выдано", "files_transferred": "Файлов передано", "home_button": "Домой"},
+    "en": { "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_description": "Fast and anonymous file transfer.", "pad_description": "A shared notepad between your devices.", "keys_issued": "Keys issued", "files_transferred": "Files transferred", "home_button": "Home"}
 }
 
 # --- Настройки безопасности для файлов ---
@@ -184,6 +122,7 @@ async def get_file_redirect(link_id: str):
     await r_kv.close()
     return RedirectResponse(url=file_url)
 
+# ИСПРАВЛЕНИЕ: Добавлен блок 'except'
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await manager.connect(websocket, room_id)
@@ -195,4 +134,11 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
             is_authed = await manager.auth_and_join(websocket, room_id, password)
             if not is_authed: return
         else:
-            await websocket
+            await websocket.close()
+            return
+
+        while True:
+            data = await websocket.receive_text()
+            await manager.broadcast(data, room_id, websocket)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, room_id)

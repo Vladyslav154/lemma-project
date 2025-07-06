@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
 import redis.asyncio as redis
+from fastapi.concurrency import run_in_threadpool # ИМПОРТ ДЛЯ РЕШЕНИЯ
 
 # --- Конфигурация ---
 load_dotenv()
@@ -98,7 +99,6 @@ async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex
 
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
-    # --- ИЗМЕНЕНИЕ: Добавлена обработка ошибок try...except ---
     try:
         file_extension = os.path.splitext(file.filename)[1].lower()
         if file_extension not in ALLOWED_EXTENSIONS:
@@ -108,7 +108,9 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         if len(contents) > MAX_FILE_SIZE:
             raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // 1024 // 1024}MB")
         
-        upload_result = cloudinary.uploader.upload(contents, resource_type="auto")
+        # ИЗМЕНЕНИЕ: Запускаем блокирующую функцию в отдельном потоке
+        upload_result = await run_in_threadpool(cloudinary.uploader.upload, contents, resource_type="auto")
+        
         file_url = upload_result.get("secure_url")
         if not file_url:
             raise HTTPException(status_code=500, detail="Cloudinary did not return a file URL.")
@@ -123,13 +125,10 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         one_time_link = f"{base_url}/file/{link_id}"
         return {"download_link": one_time_link}
     except HTTPException as e:
-        # Перехватываем наши собственные ошибки и возвращаем их
         raise e
     except Exception as e:
-        # Ловим все остальные неожиданные ошибки и возвращаем осмысленное сообщение
         print(f"An unexpected error occurred during upload: {e}")
         raise HTTPException(status_code=500, detail="Произошла непредвиденная ошибка на сервере при загрузке файла.")
-
 
 @app.get("/file/{link_id}")
 async def get_file_redirect(link_id: str):

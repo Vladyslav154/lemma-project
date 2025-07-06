@@ -29,24 +29,10 @@ cloudinary.config(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# --- ИЗМЕНЕНИЕ: Словарь переводов стал вложенным ---
+# --- Словарь переводов ---
 translations = {
-    "ru": {
-        "app_title": "Lepko",
-        "app_subtitle": "Простые инструменты для простых задач.",
-        "upgrade_link": "Получить Pro",
-        "activate_key": "Активировать ключ",
-        "drop_description": "Быстрая и анонимная передача файлов.",
-        "pad_description": "Общий блокнот между вашими устройствами."
-    },
-    "en": {
-        "app_title": "Lepko",
-        "app_subtitle": "Simple tools for simple tasks.",
-        "upgrade_link": "Get Pro",
-        "activate_key": "Activate Key",
-        "drop_description": "Fast and anonymous file transfer.",
-        "pad_description": "A shared notepad between your devices."
-    }
+    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами." },
+    "en": { "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_description": "Fast and anonymous file transfer.", "pad_description": "A shared notepad between your devices." }
 }
 
 # --- Настройки безопасности для файлов ---
@@ -55,7 +41,6 @@ ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx", ".zip", 
 
 # --- Менеджер подключений чата ---
 class ConnectionManager:
-    # ... (код ConnectionManager остается без изменений)
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
         self.room_passwords: Dict[str, str] = {}
@@ -90,75 +75,10 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # --- Эндпоинты ---
-# Редирект с корня на язык по умолчанию (русский)
 @app.get("/")
 async def root_redirect():
     return RedirectResponse(url="/ru")
 
-# ИЗМЕНЕНИЕ: Все эндпоинты теперь включают {lang}
 @app.get("/{lang}", response_class=HTMLResponse)
-async def read_root(request: Request, lang: str = Path("ru", regex="ru|en")):
-    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
-    return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
-
-@app.get("/{lang}/drop", response_class=HTMLResponse)
-async def drop_page(request: Request, lang: str = Path("ru", regex="ru|en")):
-    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
-    return templates.TemplateResponse("drop.html", {"request": request, "t": t, "lang": lang})
-
-@app.get("/{lang}/pad")
-async def pad_redirect_lang(lang: str = Path("ru", regex="ru|en")):
-    room_id = str(uuid.uuid4().hex[:8])
-    return RedirectResponse(url=f"/{lang}/pad/{room_id}")
-
-@app.get("/{lang}/pad/{room_id}", response_class=HTMLResponse)
-async def pad_room(request: Request, room_id: str, lang: str = Path("ru", regex="ru|en")):
-    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
-    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
-
-# Эндпоинты API остаются без {lang} префикса для простоты
-@app.post("/upload")
-async def upload_file(request: Request, file: UploadFile = File(...)):
-    file_extension = os.path.splitext(file.filename)[1].lower()
-    if file_extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Недопустимый тип файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}")
-    contents = await file.read()
-    if len(contents) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // 1024 // 1024}MB")
-    upload_result = cloudinary.uploader.upload(contents, resource_type="auto")
-    file_url = upload_result.get("secure_url")
-    link_id = str(uuid.uuid4().hex[:10])
-    r_kv = redis.from_url(redis_url, decode_responses=True)
-    await r_kv.setex(link_id, 900, file_url)
-    await r_kv.close()
-    base_url = str(request.base_url).replace('/ru', '').replace('/en', '') # Очищаем URL
-    one_time_link = f"{base_url}file/{link_id}"
-    return {"download_link": one_time_link}
-
-@app.get("/file/{link_id}")
-async def get_file_redirect(link_id: str):
-    r_kv = redis.from_url(redis_url, decode_responses=True)
-    file_url = await r_kv.get(link_id)
-    if not file_url: raise HTTPException(status_code=404, detail="Link is invalid, has been used, or has expired.")
-    await r_kv.delete(link_id)
-    await r_kv.close()
-    return RedirectResponse(url=file_url)
-
-@app.websocket("/ws/{room_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    await manager.connect(websocket, room_id)
-    try:
-        auth_data_str = await websocket.receive_text()
-        auth_data = json.loads(auth_data_str)
-        if auth_data.get("type") == "auth":
-            password = auth_data.get("password")
-            is_authed = await manager.auth_and_join(websocket, room_id, password)
-            if not is_authed: return
-        else:
-            await websocket.close()
-            return
-        while True:
-            data = await websocket.receive_text()
-            await manager.broadcast(data, room_id, websocket)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, room_id)
+async def read_root(request: Request, lang: str = Path(regex="ru|en")):
+    def t(key: str) -> str: return translations.get(lang

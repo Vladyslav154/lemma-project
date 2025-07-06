@@ -15,14 +15,39 @@
     </div>
     <div id="result-container" class="hidden">
         <h2>{{ t('ready_text') }}</h2>
+
+        <div id="qrcode-container">
+            <div id="qrcode"></div>
+        </div>
+
         <div class="link-wrapper">
             <input type="text" id="download-link" readonly>
             <button id="copy-button" class="button">{{ t('copy_button') }}</button>
         </div>
-        <p class="small-text" style="font-size: 0.8rem; opacity: 0.7;">{{ t('one_time_link_text') }}</p>
-        <a href="/drop?lang={{ lang }}" style="margin-top: 1rem; display: inline-block;">{{ t('send_another_file') }}</a>
+        <p class="small-text">{{ t('one_time_link_text') }}</p>
+        <a href="/drop?lang={{ lang }}" class="send-another-link">{{ t('send_another_file') }}</a>
     </div>
 </div>
+
+<style>
+    #qrcode-container {
+        margin: 1.5rem auto;
+        padding: 1rem;
+        background: #ffffff;
+        border-radius: 8px;
+        display: inline-block;
+    }
+    .small-text {
+        font-size: 0.8rem;
+        opacity: 0.7;
+    }
+    .send-another-link {
+        margin-top: 1rem;
+        display: inline-block;
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -33,14 +58,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadLinkInput = document.getElementById('download-link');
     const copyButton = document.getElementById('copy-button');
     const progressContainer = document.getElementById('progress-container');
+    const qrcodeContainer = document.getElementById('qrcode');
     
-    // Безопасно получаем тексты для кнопки
-    const originalCopyText = copyButton ? copyButton.textContent : 'Copy';
+    if (!dropZone) return;
+
+    const originalCopyText = copyButton.textContent;
     const copiedText = "{{ t('copied_button') }}";
-
-    if (!dropZone) return; // Если мы не на той странице, выходим
-
-    dropZone.addEventListener('click', () => fileInput.click());
 
     function handleFile(file) {
         uploadContainer.style.display = 'none';
@@ -56,8 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(response => {
             if (!response.ok) {
-                // Попытаемся получить текст ошибки от сервера
-                return response.json().then(err => { throw new Error(err.detail || 'Network response was not ok'); });
+                return response.json().then(err => { throw new Error(err.detail || 'Server error'); });
             }
             return response.json();
         })
@@ -66,50 +88,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressContainer.classList.add('hidden');
                 resultContainer.classList.remove('hidden');
                 downloadLinkInput.value = data.download_link;
+
+                // Генерируем QR-код
+                qrcodeContainer.innerHTML = ""; // Очищаем предыдущий код
+                new QRCode(qrcodeContainer, {
+                    text: data.download_link,
+                    width: 128,
+                    height: 128,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+
             } else {
                 throw new Error(data.detail || 'Failed to get link.');
             }
         })
         .catch(error => {
-            console.error('Ошибка:', error);
-            alert('Произошла ошибка: ' + error.message);
-            // Возвращаем исходный вид
+            console.error('Error:', error);
+            alert('Error: ' + error.message);
             uploadContainer.style.display = 'block';
             progressContainer.classList.add('hidden');
         });
     }
 
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('drag-over');
-    });
-
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('drag-over');
-    });
-
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFile(files[0]);
-        }
+        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
     });
-
-    fileInput.addEventListener('change', () => {
-        if (fileInput.files.length > 0) {
-            handleFile(fileInput.files[0]);
-        }
-    });
+    fileInput.addEventListener('change', () => { if (fileInput.files.length > 0) handleFile(fileInput.files[0]); });
     
     copyButton.addEventListener('click', () => {
         downloadLinkInput.select();
         document.execCommand('copy');
         copyButton.textContent = copiedText;
-        setTimeout(() => {
-            copyButton.textContent = originalCopyText;
-        }, 2000);
+        setTimeout(() => { copyButton.textContent = originalCopyText; }, 2000);
     });
 });
 </script>

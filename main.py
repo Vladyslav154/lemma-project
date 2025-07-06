@@ -31,8 +31,8 @@ templates = Jinja2Templates(directory="templates")
 
 # --- Словарь переводов ---
 translations = {
-    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_title": "Drop", "drop_description": "Быстрая и анонимная передача файлов.", "pad_title": "Pad", "pad_description": "Общий блокнот между вашими устройствами.", "home_button": "Домой"},
-    "en": { "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_title": "Drop", "drop_description": "Fast and anonymous file transfer.", "pad_title": "Pad", "pad_description": "A shared notepad between your devices.", "home_button": "Home"}
+    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами.", "home_button": "Домой"},
+    "en": { "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_description": "Fast and anonymous file transfer.", "pad_description": "A shared notepad between your devices.", "home_button": "Home"}
 }
 
 # --- Менеджер подключений чата ---
@@ -67,6 +67,18 @@ async def get_service_worker(): return FileResponse(os.path.join(BASE_DIR, "serv
 async def read_root(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
+
+# --- НОВЫЙ ЭНДПОИНТ ДЛЯ ВХОДА ПО ОДНОРАЗОВОЙ ССЫЛКЕ ---
+@app.get("/join/{pulse_id}")
+async def join_via_link(pulse_id: str, lang: str = Query("ru", regex="ru|en")):
+    r = redis.from_url(redis_url, decode_responses=True)
+    room_id = await r.get(f"pulse:{pulse_id}")
+    if not room_id:
+        raise HTTPException(status_code=404, detail="Invite link is invalid or has expired.")
+    await r.delete(f"pulse:{pulse_id}") # Ссылка "сгорает" после использования
+    await r.close()
+    # Перенаправляем пользователя в комнату
+    return RedirectResponse(url=f"/pad/{room_id}?lang={lang}")
 
 # --- API ЭНДПОИНТЫ ДЛЯ "РУКОПОЖАТИЯ" ---
 @app.post("/api/pulse/create/{room_id}")

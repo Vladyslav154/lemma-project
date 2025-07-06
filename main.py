@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
 import redis.asyncio as redis
-from fastapi.concurrency import run_in_threadpool # ИМПОРТ ДЛЯ РЕШЕНИЯ
+from fastapi.concurrency import run_in_threadpool
 
 # --- Конфигурация ---
 load_dotenv()
@@ -82,53 +82,62 @@ async def read_root(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
 
+# ... (остальные GET эндпоинты без изменений)
 @app.get("/drop", response_class=HTMLResponse)
 async def drop_page(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("drop.html", {"request": request, "t": t, "lang": lang})
-
 @app.get("/pad")
 async def pad_redirect(lang: str = Query("ru", regex="ru|en")):
     room_id = str(uuid.uuid4().hex[:8])
     return RedirectResponse(url=f"/pad/{room_id}?lang={lang}")
-
 @app.get("/pad/{room_id}", response_class=HTMLResponse)
 async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
 
+# ИЗМЕНЕНИЕ: Логика загрузки файла
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
+    file_extension = os.path.splitext(file.filename)[1].lower()
+    if file_extension not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Недопустимый тип файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}")
+    
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // 1024 // 1024}MB")
+    
+    # Создаем временный файл
+    temp_file_path = f"/tmp/{uuid.uuid4()}{file_extension}"
     try:
-        file_extension = os.path.splitext(file.filename)[1].lower()
-        if file_extension not in ALLOWED_EXTENSIONS:
-            raise HTTPException(status_code=400, detail=f"Недопустимый тип файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}")
+        with open(temp_file_path, "wb") as buffer:
+            buffer.write(contents)
         
-        contents = await file.read()
-        if len(contents) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // 1024 // 1024}MB")
-        
-        # ИЗМЕНЕНИЕ: Запускаем блокирующую функцию в отдельном потоке
-        upload_result = await run_in_threadpool(cloudinary.uploader.upload, contents, resource_type="auto")
-        
-        file_url = upload_result.get("secure_url")
-        if not file_url:
-            raise HTTPException(status_code=500, detail="Cloudinary did not return a file URL.")
-
-        link_id = str(uuid.uuid4().hex[:10])
-        
-        r_kv = redis.from_url(redis_url, decode_responses=True)
-        await r_kv.setex(link_id, 900, file_url)
-        await r_kv.close()
-        
-        base_url = str(request.base_url).rstrip('/')
-        one_time_link = f"{base_url}/file/{link_id}"
-        return {"download_link": one_time_link}
-    except HTTPException as e:
-        raise e
+        # Загружаем из временного файла в Cloudinary
+        upload_result = await run_in_threadpool(cloudinary.uploader.upload, temp_file_path, resource_type="auto")
+    
     except Exception as e:
         print(f"An unexpected error occurred during upload: {e}")
         raise HTTPException(status_code=500, detail="Произошла непредвиденная ошибка на сервере при загрузке файла.")
+    finally:
+        # Удаляем временный файл в любом случае
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+
+    file_url = upload_result.get("secure_url")
+    if not file_url:
+        raise HTTPException(status_code=500, detail="Cloudinary did not return a file URL.")
+
+    link_id = str(uuid.uuid4().hex[:10])
+    
+    r_kv = redis.from_url(redis_url, decode_responses=True)
+    await r_kv.setex(link_id, 900, file_url)
+    await r_kv.close()
+    
+    base_url = str(request.base_url).rstrip('/')
+    one_time_link = f"{base_url}/file/{link_id}"
+    return {"download_link": one_time_link}
+
 
 @app.get("/file/{link_id}")
 async def get_file_redirect(link_id: str):

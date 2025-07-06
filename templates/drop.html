@@ -7,8 +7,10 @@
         <p>{{ t('drop_page_subtitle') }}</p>
         <div id="drop-zone">
             <p>{{ t('drop_zone_text') }}</p>
-            <input type="file" id="file-input" hidden>
         </div>
+        <button id="select-file-button" class="button" style="margin-top: 1rem;">Выбрать файл</button>
+        <input type="file" id="file-input" hidden>
+        
         <div id="progress-container" class="hidden">
             <p>{{ t('uploading_text') }}</p>
         </div>
@@ -43,6 +45,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
+    const selectFileButton = document.getElementById('select-file-button'); // Находим новую кнопку
     const uploadContainer = document.getElementById('upload-container');
     const resultContainer = document.getElementById('result-container');
     const downloadLinkInput = document.getElementById('download-link');
@@ -50,12 +53,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressContainer = document.getElementById('progress-container');
     const qrcodeContainer = document.getElementById('qrcode');
     
-    if (!dropZone) return; // Выходим, если это не страница дропа
+    if (!dropZone) return;
 
     const originalCopyText = copyButton.textContent;
     const copiedText = "{{ t('copied_button') }}";
 
     function handleFile(file) {
+        if (!file) return;
         uploadContainer.style.display = 'none';
         progressContainer.classList.remove('hidden');
         resultContainer.classList.add('hidden');
@@ -70,7 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(response => {
             if (!response.ok) {
                 return response.json().then(err => { 
-                    // Формируем сообщение об ошибке, даже если 'detail' нет
                     const errorMessage = err.detail || `Server responded with status: ${response.status}`;
                     throw new Error(errorMessage);
                 });
@@ -83,13 +86,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 resultContainer.classList.remove('hidden');
                 downloadLinkInput.value = data.download_link;
 
-                qrcodeContainer.innerHTML = ""; // Очищаем предыдущий код
+                qrcodeContainer.innerHTML = "";
                 new QRCode(qrcodeContainer, {
                     text: data.download_link,
-                    width: 128,
-                    height: 128,
-                    colorDark : "#000000",
-                    colorLight : "#ffffff",
+                    width: 128, height: 128,
+                    colorDark : "#000000", colorLight : "#ffffff",
                     correctLevel : QRCode.CorrectLevel.H
                 });
             } else {
@@ -106,31 +107,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Привязка событий
     dropZone.addEventListener('click', () => fileInput.click());
+    selectFileButton.addEventListener('click', () => fileInput.click()); // Новая кнопка делает то же самое
+
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
-        if (e.dataTransfer.files.length > 0) {
-            handleFile(e.dataTransfer.files[0]);
-        }
+        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
     });
-    fileInput.addEventListener('change', () => {
-        if (fileInput.files.length > 0) {
-            handleFile(fileInput.files[0]);
-        }
-    });
+    fileInput.addEventListener('change', () => { if (fileInput.files.length > 0) handleFile(fileInput.files[0]); });
     
     copyButton.addEventListener('click', () => {
-        downloadLinkInput.select();
-        // Для современных браузеров лучше использовать Clipboard API
         navigator.clipboard.writeText(downloadLinkInput.value).then(() => {
             copyButton.textContent = copiedText;
-            setTimeout(() => {
-                copyButton.textContent = originalCopyText;
-            }, 2000);
-        }).catch(err => {
-            console.error('Failed to copy text: ', err);
+            setTimeout(() => { copyButton.textContent = originalCopyText; }, 2000);
         });
     });
 });

@@ -3,7 +3,8 @@ import uuid
 import json
 import asyncio
 from typing import Dict, List
-from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
+# ИЗМЕНЕНИЕ: Добавлены 'File' и 'UploadFile' обратно
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -35,18 +36,16 @@ translations = { "app_title": "Lepko", "app_subtitle": "Простые инст�
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
-        self.room_passwords: Dict[str, str] = {} # Словарь для хранения паролей
+        self.room_passwords: Dict[str, str] = {}
 
     async def connect(self, websocket: WebSocket, room_id: str):
         await websocket.accept()
-        # Проверяем, есть ли уже пароль для этой комнаты
         if room_id in self.room_passwords:
             await websocket.send_text(json.dumps({"type": "auth_required", "action": "enter"}))
         else:
             await websocket.send_text(json.dumps({"type": "auth_required", "action": "set"}))
 
     async def auth_and_join(self, websocket: WebSocket, room_id: str, password: str):
-        # Если комнаты и пароля нет, устанавливаем его
         if room_id not in self.room_passwords:
             self.room_passwords[room_id] = password
             if room_id not in self.active_connections:
@@ -54,12 +53,10 @@ class ConnectionManager:
             self.active_connections[room_id].append(websocket)
             await websocket.send_text(json.dumps({"type": "auth_success", "message": "Пароль установлен."}))
             return True
-        # Если пароль есть и он верный
         elif self.room_passwords.get(room_id) == password:
             self.active_connections[room_id].append(websocket)
             await websocket.send_text(json.dumps({"type": "auth_success", "message": "Доступ разрешен."}))
             return True
-        # Если пароль неверный
         else:
             await websocket.send_text(json.dumps({"type": "auth_fail", "message": "Неверный пароль."}))
             return False
@@ -67,10 +64,10 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket, room_id: str):
         if room_id in self.active_connections and websocket in self.active_connections[room_id]:
             self.active_connections[room_id].remove(websocket)
-            if not self.active_connections[room_id]: # Если в комнате никого не осталось
+            if not self.active_connections[room_id]:
                 del self.active_connections[room_id]
                 if room_id in self.room_passwords:
-                    del self.room_passwords[room_id] # Удаляем пароль
+                    del self.room_passwords[room_id]
 
     async def broadcast(self, message: str, room_id: str, sender: WebSocket):
         if room_id in self.active_connections:
@@ -81,7 +78,6 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # --- Эндпоинты ---
-
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     def t(key: str) -> str: return translations.get(key, key)
@@ -124,21 +120,17 @@ async def get_file_redirect(link_id: str):
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await manager.connect(websocket, room_id)
-    
     try:
-        # --- Аутентификация ---
         auth_data_str = await websocket.receive_text()
         auth_data = json.loads(auth_data_str)
         if auth_data.get("type") == "auth":
             password = auth_data.get("password")
             is_authed = await manager.auth_and_join(websocket, room_id, password)
-            if not is_authed:
-                return # Закрываем соединение, если пароль неверный
-        else: # Если первое сообщение не для авторизации
+            if not is_authed: return
+        else:
             await websocket.close()
             return
 
-        # --- Основной цикл чата ---
         while True:
             data = await websocket.receive_text()
             await manager.broadcast(data, room_id, websocket)

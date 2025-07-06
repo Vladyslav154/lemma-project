@@ -1,4 +1,4 @@
-const CACHE_NAME = 'lepko-cache-v2'; // Увеличили версию кэша, чтобы обновить все файлы
+const CACHE_NAME = 'lepko-cache-v3'; // ИЗМЕНЕНИЕ: Увеличили версию кэша
 const urlsToCache = [
   '/?lang=ru',
   '/?lang=en',
@@ -35,17 +35,15 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const { request } = event;
 
-  // Игнорируем все, что не является GET-запросом (например, WebSocket)
   if (request.method !== 'GET') {
     return;
   }
 
-  // Для HTML-страниц (навигационных запросов) используем "Network First"
+  // Для HTML-страниц используем "Network First"
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then(response => {
-          // Если получили ответ из сети, кешируем его и возвращаем
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then(cache => {
             cache.put(request, responseToCache);
@@ -53,23 +51,17 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => {
-          // Если сети нет, ищем ответ в кеше
           return caches.match(request);
         })
     );
     return;
   }
 
-  // Для остальных ресурсов (CSS, JS, иконки) используем "Cache First"
+  // Для остальных ресурсов используем "Cache First"
   event.respondWith(
     caches.match(request)
       .then(cachedResponse => {
-        // Если ресурс есть в кеше, возвращаем его
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        // Если нет, идем в сеть, получаем, кешируем и возвращаем
-        return fetch(request).then(networkResponse => {
+        return cachedResponse || fetch(request).then(networkResponse => {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then(cache => {
             cache.put(request, responseToCache);

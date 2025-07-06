@@ -30,21 +30,11 @@
 </div>
 
 <style>
-    #qrcode-container {
-        margin: 1.5rem auto;
-        padding: 1rem;
-        background: #ffffff;
-        border-radius: 8px;
-        display: inline-block;
-    }
-    .small-text {
-        font-size: 0.8rem;
-        opacity: 0.7;
-    }
-    .send-another-link {
-        margin-top: 1rem;
-        display: inline-block;
-    }
+    #qrcode-container { margin: 1.5rem auto; padding: 1rem; background: #ffffff; border-radius: 8px; display: inline-block; }
+    .small-text { font-size: 0.8rem; opacity: 0.7; }
+    .send-another-link { margin-top: 1rem; display: inline-block; }
+    #drop-zone.drag-over { border-color: var(--primary-color); background-color: rgba(88, 166, 255, 0.1); }
+    .link-wrapper button { border-radius: 0 6px 6px 0; }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -60,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const progressContainer = document.getElementById('progress-container');
     const qrcodeContainer = document.getElementById('qrcode');
     
-    if (!dropZone) return;
+    if (!dropZone) return; // Выходим, если это не страница дропа
 
     const originalCopyText = copyButton.textContent;
     const copiedText = "{{ t('copied_button') }}";
@@ -79,7 +69,11 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(response => {
             if (!response.ok) {
-                return response.json().then(err => { throw new Error(err.detail || 'Server error'); });
+                return response.json().then(err => { 
+                    // Формируем сообщение об ошибке, даже если 'detail' нет
+                    const errorMessage = err.detail || `Server responded with status: ${response.status}`;
+                    throw new Error(errorMessage);
+                });
             }
             return response.json();
         })
@@ -89,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 resultContainer.classList.remove('hidden');
                 downloadLinkInput.value = data.download_link;
 
-                // Генерируем QR-код
                 qrcodeContainer.innerHTML = ""; // Очищаем предыдущий код
                 new QRCode(qrcodeContainer, {
                     text: data.download_link,
@@ -99,34 +92,46 @@ document.addEventListener('DOMContentLoaded', () => {
                     colorLight : "#ffffff",
                     correctLevel : QRCode.CorrectLevel.H
                 });
-
             } else {
-                throw new Error(data.detail || 'Failed to get link.');
+                throw new Error('Failed to get download link from server.');
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            alert('Error: ' + error.message);
+            console.error('Upload Error:', error);
+            alert('Ошибка загрузки: ' + error.message);
             uploadContainer.style.display = 'block';
             progressContainer.classList.add('hidden');
         });
     }
 
+    // Привязка событий
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
-        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+        if (e.dataTransfer.files.length > 0) {
+            handleFile(e.dataTransfer.files[0]);
+        }
     });
-    fileInput.addEventListener('change', () => { if (fileInput.files.length > 0) handleFile(fileInput.files[0]); });
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+            handleFile(fileInput.files[0]);
+        }
+    });
     
     copyButton.addEventListener('click', () => {
         downloadLinkInput.select();
-        document.execCommand('copy');
-        copyButton.textContent = copiedText;
-        setTimeout(() => { copyButton.textContent = originalCopyText; }, 2000);
+        // Для современных браузеров лучше использовать Clipboard API
+        navigator.clipboard.writeText(downloadLinkInput.value).then(() => {
+            copyButton.textContent = copiedText;
+            setTimeout(() => {
+                copyButton.textContent = originalCopyText;
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+        });
     });
 });
 </script>

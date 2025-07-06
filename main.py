@@ -3,7 +3,7 @@ import uuid
 import json
 import asyncio
 from typing import Dict, List
-from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect, Path
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -75,27 +75,23 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # --- Эндпоинты ---
-@app.get("/")
-async def root_redirect():
-    return RedirectResponse(url="/ru")
-
-@app.get("/{lang}", response_class=HTMLResponse)
-async def read_root(request: Request, lang: str = Path(regex="ru|en")):
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
 
-@app.get("/{lang}/drop", response_class=HTMLResponse)
-async def drop_page(request: Request, lang: str = Path(regex="ru|en")):
+@app.get("/drop", response_class=HTMLResponse)
+async def drop_page(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("drop.html", {"request": request, "t": t, "lang": lang})
 
-@app.get("/{lang}/pad")
-async def pad_redirect_lang(lang: str = Path(regex="ru|en")):
+@app.get("/pad")
+async def pad_redirect(lang: str = Query("ru", regex="ru|en")):
     room_id = str(uuid.uuid4().hex[:8])
-    return RedirectResponse(url=f"/{lang}/pad/{room_id}")
+    return RedirectResponse(url=f"/pad/{room_id}?lang={lang}")
 
-@app.get("/{lang}/pad/{room_id}", response_class=HTMLResponse)
-async def pad_room(request: Request, room_id: str, lang: str = Path(regex="ru|en")):
+@app.get("/pad/{room_id}", response_class=HTMLResponse)
+async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
 

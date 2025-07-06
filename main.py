@@ -86,7 +86,6 @@ async def read_root(request: Request):
     def t(key: str) -> str: return translations.get(key, key)
     return templates.TemplateResponse("index.html", {"request": request, "t": t})
 
-# ИСПРАВЛЕНИЕ: Возвращен символ '@'
 @app.get("/drop", response_class=HTMLResponse)
 async def drop_page(request: Request):
     def t(key: str) -> str: return translations.get(key, key)
@@ -102,6 +101,7 @@ async def pad_room(request: Request, room_id: str):
     def t(key: str) -> str: return translations.get(key, key)
     return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t})
 
+# ИСПРАВЛЕНО: Возвращен декоратор '@app.post'
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
     file_extension = os.path.splitext(file.filename)[1].lower()

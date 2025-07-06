@@ -4,7 +4,7 @@ import json
 import asyncio
 from typing import Dict, List, Optional
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -44,8 +44,37 @@ trial_keys = {}
 
 # --- Менеджер подключений чата ---
 class ConnectionManager:
-    # ... (код ConnectionManager без изменений)
-    pass
+    def __init__(self):
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.room_passwords: Dict[str, str] = {}
+    async def connect(self, websocket: WebSocket, room_id: str):
+        await websocket.accept()
+        if room_id in self.room_passwords: await websocket.send_text(json.dumps({"type": "auth_required", "action": "enter"}))
+        else: await websocket.send_text(json.dumps({"type": "auth_required", "action": "set"}))
+    async def auth_and_join(self, websocket: WebSocket, room_id: str, password: str):
+        if room_id not in self.room_passwords:
+            self.room_passwords[room_id] = password
+            if room_id not in self.active_connections: self.active_connections[room_id] = []
+            self.active_connections[room_id].append(websocket)
+            await websocket.send_text(json.dumps({"type": "auth_success", "message": "Пароль установлен."}))
+            return True
+        elif self.room_passwords.get(room_id) == password:
+            self.active_connections[room_id].append(websocket)
+            await websocket.send_text(json.dumps({"type": "auth_success", "message": "Доступ разрешен."}))
+            return True
+        else:
+            await websocket.send_text(json.dumps({"type": "auth_fail", "message": "Неверный пароль."}))
+            return False
+    def disconnect(self, websocket: WebSocket, room_id: str):
+        if room_id in self.active_connections and websocket in self.active_connections[room_id]:
+            self.active_connections[room_id].remove(websocket)
+            if not self.active_connections[room_id]:
+                del self.active_connections[room_id]
+                if room_id in self.room_passwords: del self.room_passwords[room_id]
+    async def broadcast(self, message: str, room_id: str, sender: WebSocket):
+        if room_id in self.active_connections:
+            for connection in self.active_connections[room_id]:
+                if connection != sender: await connection.send_text(message)
 manager = ConnectionManager()
 
 # --- Эндпоинты ---
@@ -54,4 +83,6 @@ async def read_root(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
 
-# ... (все остальные эндпоинты, включая WebSocket)
+@app.get("/drop", response_class=HTMLResponse)
+async def drop_page(request: Request, lang: str = Query("ru", regex="ru|en")):
+    def t(key: str) -> str: return translations.get(

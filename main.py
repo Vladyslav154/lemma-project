@@ -3,6 +3,7 @@ import uuid
 import json
 import asyncio
 from typing import Dict, List, Optional
+from pydantic import BaseModel # ИСПРАВЛЕНИЕ: Добавлен этот импорт
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect, Query, Path
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
@@ -30,18 +31,8 @@ templates = Jinja2Templates(directory="templates")
 
 # --- Словарь переводов ---
 translations = {
-    "ru": { 
-        "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", 
-        "drop_title": "Файлообменник", "drop_description": "Быстрая и анонимная передача файлов.", 
-        "pad_title": "Блокнот", "pad_description": "Общий блокнот между вашими устройствами.", 
-        "home_button": "Домой"
-    },
-    "en": { 
-        "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", 
-        "drop_title": "File Drop", "drop_description": "Fast and anonymous file transfer.", 
-        "pad_title": "Notepad", "pad_description": "A shared notepad between your devices.", 
-        "home_button": "Home"
-    }
+    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_title": "Файлообменник", "drop_description": "Быстрая и анонимная передача файлов.", "pad_title": "Блокнот", "pad_description": "Общий блокнот между вашими устройствами.", "home_button": "Домой"},
+    "en": { "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_title": "File Drop", "drop_description": "Fast and anonymous file transfer.", "pad_title": "Notepad", "pad_description": "A shared notepad between your devices.", "home_button": "Home"}
 }
 
 # --- Менеджер подключений чата ---
@@ -69,7 +60,6 @@ class PulseRequest(BaseModel):
 # --- Эндпоинты ---
 @app.get("/manifest.json", include_in_schema=False)
 async def get_manifest(): return FileResponse(os.path.join(BASE_DIR, "manifest.json"))
-
 @app.get("/service-worker.js", include_in_schema=False)
 async def get_service_worker(): return FileResponse(os.path.join(BASE_DIR, "service-worker.js"))
 
@@ -77,6 +67,11 @@ async def get_service_worker(): return FileResponse(os.path.join(BASE_DIR, "serv
 async def read_root(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
+    
+@app.get("/join", response_class=HTMLResponse)
+async def join_page(request: Request, lang: str = Query("ru", regex="ru|en")):
+    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
+    return templates.TemplateResponse("join.html", {"request": request, "t": t, "lang": lang})
 
 @app.get("/join/{pulse_id}")
 async def join_via_link(pulse_id: str, lang: str = Query("ru", regex="ru|en")):

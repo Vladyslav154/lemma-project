@@ -1,7 +1,9 @@
 import os
 import uuid
+import json
+import asyncio
 from typing import Dict, List
-from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -27,24 +29,48 @@ cloudinary.config(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-translations = { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами.", "keys_issued": "Ключей выдано", "files_transferred": "Файлов передано"}
+translations = { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами."}
 
-# --- Простой менеджер подключений (в памяти) ---
+# --- Менеджер подключений с логикой паролей ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.room_passwords: Dict[str, str] = {} # Словарь для хранения паролей
 
     async def connect(self, websocket: WebSocket, room_id: str):
         await websocket.accept()
-        if room_id not in self.active_connections:
-            self.active_connections[room_id] = []
-        self.active_connections[room_id].append(websocket)
+        # Проверяем, есть ли уже пароль для этой комнаты
+        if room_id in self.room_passwords:
+            await websocket.send_text(json.dumps({"type": "auth_required", "action": "enter"}))
+        else:
+            await websocket.send_text(json.dumps({"type": "auth_required", "action": "set"}))
+
+    async def auth_and_join(self, websocket: WebSocket, room_id: str, password: str):
+        # Если комнаты и пароля нет, устанавливаем его
+        if room_id not in self.room_passwords:
+            self.room_passwords[room_id] = password
+            if room_id not in self.active_connections:
+                self.active_connections[room_id] = []
+            self.active_connections[room_id].append(websocket)
+            await websocket.send_text(json.dumps({"type": "auth_success", "message": "Пароль установлен."}))
+            return True
+        # Если пароль есть и он верный
+        elif self.room_passwords.get(room_id) == password:
+            self.active_connections[room_id].append(websocket)
+            await websocket.send_text(json.dumps({"type": "auth_success", "message": "Доступ разрешен."}))
+            return True
+        # Если пароль неверный
+        else:
+            await websocket.send_text(json.dumps({"type": "auth_fail", "message": "Неверный пароль."}))
+            return False
 
     def disconnect(self, websocket: WebSocket, room_id: str):
         if room_id in self.active_connections and websocket in self.active_connections[room_id]:
             self.active_connections[room_id].remove(websocket)
-            if not self.active_connections[room_id]:
+            if not self.active_connections[room_id]: # Если в комнате никого не осталось
                 del self.active_connections[room_id]
+                if room_id in self.room_passwords:
+                    del self.room_passwords[room_id] # Удаляем пароль
 
     async def broadcast(self, message: str, room_id: str, sender: WebSocket):
         if room_id in self.active_connections:
@@ -78,7 +104,6 @@ async def pad_room(request: Request, room_id: str):
 
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
-    # Эта часть продолжает использовать Redis для файлов
     upload_result = cloudinary.uploader.upload(file.file, resource_type="auto")
     file_url = upload_result.get("secure_url")
     link_id = str(uuid.uuid4().hex[:10])
@@ -96,11 +121,24 @@ async def get_file_redirect(link_id: str):
     await r_kv.close()
     return RedirectResponse(url=file_url)
 
-# WebSocket эндпоинт (простая версия без пароля)
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await manager.connect(websocket, room_id)
+    
     try:
+        # --- Аутентификация ---
+        auth_data_str = await websocket.receive_text()
+        auth_data = json.loads(auth_data_str)
+        if auth_data.get("type") == "auth":
+            password = auth_data.get("password")
+            is_authed = await manager.auth_and_join(websocket, room_id, password)
+            if not is_authed:
+                return # Закрываем соединение, если пароль неверный
+        else: # Если первое сообщение не для авторизации
+            await websocket.close()
+            return
+
+        # --- Основной цикл чата ---
         while True:
             data = await websocket.receive_text()
             await manager.broadcast(data, room_id, websocket)

@@ -1,8 +1,6 @@
 services:
   - type: web
     name: lemma-project
-    # Указываем, что среда выполнения - это Docker
     env: docker
-    plan: free
-    # Проверка "здоровья" сервиса
-    healthCheckPath: /
+    plan: free # Или ваш платный тариф
+    healthCheckPath: /?lang=ru

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="form-container" style="max-width: 500px;">
+    <h1>{{ t('join_title') }}</h1>
+    <p>{{ t('join_subtitle') }}</p>
+    <div id="qr-reader" style="width: 100%; margin-top: 1rem; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);"></div>
+    <div id="qr-reader-results" style="margin-top: 1rem; color: var(--primary-color); font-weight: bold;"></div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const resultsContainer = document.getElementById('qr-reader-results');
+    const lang = new URLSearchParams(window.location.search).get('lang') || 'ru';
+
+    function onScanSuccess(decodedText, decodedResult) {
+        resultsContainer.textContent = (lang === 'ru') ? `Код отсканирован, соединяемся...` : `Code scanned, connecting...`;
+        
+        // Останавливаем камеру
+        html5QrcodeScanner.clear().catch(err => console.error("Failed to clear scanner:", err));
+
+        // Отправляем отсканированный pulse_id на сервер
+        fetch('/api/pulse/join', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pulse_id: decodedText })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw new Error(err.detail || 'Invalid code'); });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.room_id) {
+                // Перенаправляем в комнату
+                window.location.href = `/pad/${data.room_id}?lang=${lang}`;
+            } else {
+                 resultsContainer.textContent = (lang === 'ru') ? 'Ошибка: Неверный код приглашения.' : 'Error: Invalid invite code.';
+            }
+        })
+        .catch(err => {
+            resultsContainer.textContent = (lang === 'ru') ? `Ошибка: ${err.message}` : `Error: ${err.message}`;
+        });
+    }
+
+    function onScanFailure(error) {
+        // Игнорируем, так как это происходит постоянно, пока код не найден
+    }
+
+    let html5QrcodeScanner = new Html5QrcodeScanner(
+        "qr-reader", 
+        { 
+            fps: 10, 
+            qrbox: {width: 250, height: 250},
+            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA] 
+        },
+        /* verbose= */ false
+    );
+    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+});
+</script>
+{% endblock %}

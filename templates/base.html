@@ -7,11 +7,11 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="home-button">
-        <a href="/?lang={{ lang }}">🏠 Домой</a>
+    <div class="nav-button home-button">
+        <a href="/?lang={{ lang }}">🏠 {{ t('home_button') }}</a>
     </div>
 
-    <div class="lang-switcher">
+    <div class="nav-button lang-switcher">
         <a href="?lang=ru" class="{% if lang == 'ru' %}active{% endif %}">RU</a>
         <span>|</span>
         <a href="?lang=en" class="{% if lang == 'en' %}active{% endif %}">EN</a>

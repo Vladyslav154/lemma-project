@@ -29,7 +29,7 @@ cloudinary.config(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# --- ИЗМЕНЕНИЕ: Добавлены все фразы для всех страниц ---
+# --- Словарь переводов ---
 translations = {
     "ru": {
         "app_title": "Lepko",
@@ -60,7 +60,8 @@ translations = {
         "password_enter_subtitle": "Введите пароль для входа.",
         "password_placeholder": "Введите пароль...",
         "enter_button": "Войти",
-        "copied_button": "Скопировано!"
+        "copied_button": "Скопировано!",
+        "home_button": "Домой"
     },
     "en": {
         "app_title": "Lepko",
@@ -91,13 +92,16 @@ translations = {
         "password_enter_subtitle": "Enter the password to join.",
         "password_placeholder": "Enter password...",
         "enter_button": "Enter",
-        "copied_button": "Copied!"
+        "copied_button": "Copied!",
+        "home_button": "Home"
     }
 }
 
-# --- Остальной код main.py без изменений ---
+# --- Настройки безопасности для файлов ---
 MAX_FILE_SIZE = 25 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx", ".zip", ".rar"}
+
+# --- Менеджер подключений чата ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
@@ -131,22 +135,28 @@ class ConnectionManager:
             for connection in self.active_connections[room_id]:
                 if connection != sender: await connection.send_text(message)
 manager = ConnectionManager()
+
+# --- Эндпоинты ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
+
 @app.get("/drop", response_class=HTMLResponse)
 async def drop_page(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("drop.html", {"request": request, "t": t, "lang": lang})
+
 @app.get("/pad")
 async def pad_redirect(lang: str = Query("ru", regex="ru|en")):
     room_id = str(uuid.uuid4().hex[:8])
     return RedirectResponse(url=f"/pad/{room_id}?lang={lang}")
+
 @app.get("/pad/{room_id}", response_class=HTMLResponse)
 async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
+
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
     file_extension = os.path.splitext(file.filename)[1].lower()
@@ -164,6 +174,7 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
     base_url = str(request.base_url).rstrip('/')
     one_time_link = f"{base_url}/file/{link_id}"
     return {"download_link": one_time_link}
+
 @app.get("/file/{link_id}")
 async def get_file_redirect(link_id: str):
     r_kv = redis.from_url(redis_url, decode_responses=True)
@@ -172,6 +183,7 @@ async def get_file_redirect(link_id: str):
     await r_kv.delete(link_id)
     await r_kv.close()
     return RedirectResponse(url=file_url)
+
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await manager.connect(websocket, room_id)
@@ -183,10 +195,4 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
             is_authed = await manager.auth_and_join(websocket, room_id, password)
             if not is_authed: return
         else:
-            await websocket.close()
-            return
-        while True:
-            data = await websocket.receive_text()
-            await manager.broadcast(data, room_id, websocket)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, room_id)
+            await websocket

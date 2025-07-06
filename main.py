@@ -31,7 +31,7 @@ templates = Jinja2Templates(directory="templates")
 
 # --- Словарь переводов ---
 translations = {
-    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_title": "Файлообменник", "drop_description": "Быстрая и анонимная передача файлов.", "pad_title": "Чат-комнаты", "pad_description": "Создайте анонимную комнату для общения.", "home_button": "Домой", "join_title": "Войти по рукопожатию", "join_subtitle": "Наведите камеру на QR-код или перейдите по одноразовой ссылке."},
+    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_title": "Файлообменник", "drop_description": "Быстрая и анонимная передача файлов.", "pad_title": "Блокнот", "pad_description": "Создайте анонимную комнату для общения.", "home_button": "Домой", "join_title": "Войти по рукопожатию", "join_subtitle": "Наведите камеру на QR-код или перейдите по одноразовой ссылке."},
     "en": { "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_title": "File Drop", "drop_description": "Fast and anonymous file transfer.", "pad_title": "Chat Rooms", "pad_description": "Create an anonymous room for communication.", "home_button": "Home", "join_title": "Join by Handshake", "join_subtitle": "Point your camera at the QR code or use the one-time link."}
 }
 
@@ -43,14 +43,14 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections.setdefault(room_id, []).append(websocket)
     def disconnect(self, websocket: WebSocket, room_id: str):
-        if room_id in self.active_connections and websocket in self.active_connections[room_id]:
+        if room_id in self.active_connections:
             self.active_connections[room_id].remove(websocket)
             if not self.active_connections[room_id]:
                 del self.active_connections[room_id]
-    async def broadcast(self, message: str, room_id: str, sender: WebSocket):
+    async def broadcast(self, message: str, room_id: str):
         if room_id in self.active_connections:
             for connection in self.active_connections[room_id]:
-                if connection != sender: await connection.send_text(message)
+                await connection.send_text(message)
 manager = ConnectionManager()
 
 # --- Модели данных для API ---
@@ -60,6 +60,7 @@ class PulseRequest(BaseModel):
 # --- Эндпоинты ---
 @app.get("/manifest.json", include_in_schema=False)
 async def get_manifest(): return FileResponse(os.path.join(BASE_DIR, "manifest.json"))
+
 @app.get("/service-worker.js", include_in_schema=False)
 async def get_service_worker(): return FileResponse(os.path.join(BASE_DIR, "service-worker.js"))
 
@@ -83,17 +84,6 @@ async def join_via_link(pulse_id: str, lang: str = Query("ru", regex="ru|en")):
     await r.close()
     return RedirectResponse(url=f"/pad/{room_id}?lang={lang}")
 
-# Этот эндпоинт создает новую комнату и перенаправляет на нее
-@app.get("/pad")
-async def create_pad_and_redirect(lang: str = Query("ru", regex="ru|en")):
-    room_id = str(uuid.uuid4().hex[:8])
-    return RedirectResponse(url=f"/pad/{room_id}?lang={lang}")
-    
-@app.get("/pad/{room_id}", response_class=HTMLResponse)
-async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex="ru|en")):
-    def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
-    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
-
 @app.post("/api/pulse/create/{room_id}")
 async def create_pulse(room_id: str):
     r = redis.from_url(redis_url, decode_responses=True)
@@ -112,12 +102,13 @@ async def join_by_pulse(request: PulseRequest):
     await r.close()
     return {"room_id": room_id}
 
+# WebSocket эндпоинт
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
     await manager.connect(websocket, room_id)
     try:
         while True:
             data = await websocket.receive_text()
-            await manager.broadcast(data, room_id, websocket) # Отправляем всем, кроме себя
+            await manager.broadcast(data, room_id)
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_id)

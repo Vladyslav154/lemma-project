@@ -18,6 +18,7 @@ load_dotenv()
 app = FastAPI()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+redis_url = os.getenv("REDIS_URL")
 
 cloudinary.config(
   cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -31,8 +32,14 @@ templates = Jinja2Templates(directory="templates")
 
 # --- Словарь переводов ---
 translations = {
-    "ru": { "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами.", "keys_issued": "Ключей выдано", "files_transferred": "Файлов передано", "home_button": "Домой", "drop_page_title": "Приватная передача файлов", "drop_page_subtitle": "Ссылка сработает один раз и исчезнет через 15 минут.", "drop_zone_text": "Перетащите файл сюда или кликните для выбора", "uploading_text": "Загрузка...", "ready_text": "Ваш файл готов к отправке!", "copy_button": "Копировать", "one_time_link_text": "Эта ссылка сработает только один раз.", "send_another_file": "Отправить еще один файл", "pad_page_title": "Анонимный чат", "pad_room_subtitle": "Вы в комнате:", "pad_disclaimer": "Сообщения исчезают. Ничего не сохраняется.", "message_placeholder": "Введите сообщение...", "password_set_title": "Установить пароль для комнаты", "password_set_subtitle": "Первый вошедший задает пароль.", "password_enter_title": "Комната защищена", "password_enter_subtitle": "Введите пароль для входа.", "password_placeholder": "Введите пароль...", "enter_button": "Войти", "copied_button": "Скопировано!"},
-    "en": { "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_description": "Fast and anonymous file transfer.", "pad_description": "A shared notepad between your devices.", "keys_issued": "Keys issued", "files_transferred": "Files transferred", "home_button": "Home", "drop_page_title": "Private File Transfer", "drop_page_subtitle": "The link will work once and expire in 15 minutes.", "drop_zone_text": "Drag and drop a file here or click to select", "uploading_text": "Uploading...", "ready_text": "Your file is ready to be sent!", "copy_button": "Copy", "one_time_link_text": "This link will only work once.", "send_another_file": "Send another file", "pad_page_title": "Anonymous Chat", "pad_room_subtitle": "You are in room:", "pad_disclaimer": "Messages disappear. Nothing is saved.", "message_placeholder": "Enter a message...", "password_set_title": "Set a password for the room", "password_set_subtitle": "The first user to enter sets the password.", "password_enter_title": "Room is Protected", "password_enter_subtitle": "Enter the password to join.", "password_placeholder": "Enter password...", "enter_button": "Enter", "copied_button": "Copied!"}
+    "ru": {
+        "app_title": "Lepko", "app_subtitle": "Простые инструменты для простых задач.", "upgrade_link": "Получить Pro", "activate_key": "Активировать ключ", "drop_description": "Быстрая и анонимная передача файлов.", "pad_description": "Общий блокнот между вашими устройствами.", "keys_issued": "Ключей выдано", "files_transferred": "Файлов передано", "home_button": "Домой", "drop_page_title": "Приватная передача файлов", "drop_page_subtitle": "Ссылка сработает один раз и исчезнет через 15 минут.", "drop_zone_text": "Перетащите файл сюда или кликните для выбора", "uploading_text": "Загрузка...", "ready_text": "Ваш файл готов к отправке!", "copy_button": "Копировать", "one_time_link_text": "Эта ссылка сработает только один раз.", "send_another_file": "Отправить еще один файл", "pad_page_title": "Анонимный чат", "pad_room_subtitle": "Вы в комнате:", "pad_disclaimer": "Сообщения исчезают. Ничего не сохраняется.", "message_placeholder": "Введите сообщение...", "password_set_title": "Установить пароль для комнаты", "password_set_subtitle": "Первый вошедший задает пароль.", "password_enter_title": "Комната защищена", "password_enter_subtitle": "Введите пароль для входа.", "password_placeholder": "Введите пароль...", "enter_button": "Войти", "copied_button": "Скопировано!",
+        "pro_title": "Lepko Pro", "pro_subtitle": "Получите доступ к расширенным функциям и поддержите проект.", "pro_features_title": "Что вы получаете:", "pro_feature_1": "Увеличенный лимит на размер файла до 100 МБ", "pro_feature_2": "Более долгое время жизни ссылок (24 часа)", "pro_feature_3": "Приоритетная поддержка", "pro_feature_4": "Ваша поддержка помогает нам оставаться независимыми", "how_to_get_pro": "Как получить Pro:", "payment_info": "Для сохранения полной анонимности мы принимаем оплату только в криптовалюте Monero (XMR).", "payment_step_1": "Отправьте нужную сумму на этот адрес:", "payment_step_2": "После отправки, вставьте ID вашей транзакции в поле ниже для верификации.", "txn_id_placeholder": "ID транзакции (TxID)", "verify_payment_button": "Проверить платеж", "monthly_plan": "Месяц", "yearly_plan": "Год"
+    },
+    "en": {
+        "app_title": "Lepko", "app_subtitle": "Simple tools for simple tasks.", "upgrade_link": "Get Pro", "activate_key": "Activate Key", "drop_description": "Fast and anonymous file transfer.", "pad_description": "A shared notepad between your devices.", "keys_issued": "Keys issued", "files_transferred": "Files transferred", "home_button": "Home", "drop_page_title": "Private File Transfer", "drop_page_subtitle": "The link will work once and expire in 15 minutes.", "drop_zone_text": "Drag and drop a file here or click to select", "uploading_text": "Uploading...", "ready_text": "Your file is ready to be sent!", "copy_button": "Copy", "one_time_link_text": "This link will only work once.", "send_another_file": "Send another file", "pad_page_title": "Anonymous Chat", "pad_room_subtitle": "You are in room:", "pad_disclaimer": "Messages disappear. Nothing is saved.", "message_placeholder": "Enter a message...", "password_set_title": "Set a password for the room", "password_set_subtitle": "The first user to enter sets the password.", "password_enter_title": "Room is Protected", "password_enter_subtitle": "Enter the password to join.", "password_placeholder": "Enter password...", "enter_button": "Enter", "copied_button": "Copied!",
+        "pro_title": "Lepko Pro", "pro_subtitle": "Get access to advanced features and support the project.", "pro_features_title": "What you get:", "pro_feature_1": "Increased file size limit up to 100 MB", "pro_feature_2": "Longer link lifetime (24 hours)", "pro_feature_3": "Priority support", "pro_feature_4": "Your support helps us stay independent", "how_to_get_pro": "How to get Pro:", "payment_info": "To maintain full anonymity, we only accept payments in Monero (XMR).", "payment_step_1": "Send the required amount to this address:", "payment_step_2": "After sending, paste your transaction ID in the field below for verification.", "txn_id_placeholder": "Transaction ID (TxID)", "verify_payment_button": "Verify Payment", "monthly_plan": "Month", "yearly_plan": "Year"
+    }
 }
 
 # --- Настройки безопасности для файлов ---
@@ -99,7 +106,6 @@ async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
 
-# --- НОВЫЙ ЭНДПОИНТ ---
 @app.get("/upgrade", response_class=HTMLResponse)
 async def upgrade_page(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
@@ -110,21 +116,17 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Недопустимый тип файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}")
-    
     contents = await file.read()
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // 1024 // 1024}MB")
-    
     try:
         upload_result = await run_in_threadpool(cloudinary.uploader.upload, contents, resource_type="auto")
         file_url = upload_result.get("secure_url")
         if not file_url: raise HTTPException(status_code=500, detail="Cloudinary did not return a file URL.")
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при загрузке файла в облако.")
-
     link_id = str(uuid.uuid4().hex[:10])
     file_links[link_id] = {"url": file_url, "timestamp": time.time()}
-    
     base_url = str(request.base_url).rstrip('/')
     one_time_link = f"{base_url}/file/{link_id}"
     return {"download_link": one_time_link}

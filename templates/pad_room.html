@@ -6,7 +6,7 @@
         <h1 id="password-title">Установить пароль для комнаты</h1>
         <p id="password-subtitle">Первый вошедший задает пароль.</p>
         <form id="password-form" class="chat-form">
-            <input type="password" id="password-input" placeholder="Введите пароль...">
+            <input type="password" id="password-input" placeholder="Введите пароль..." autocomplete="off">
             <button type="submit" id="password-button" disabled>Войти</button>
         </form>
         <p id="password-error" class="error-message"></p>
@@ -34,8 +34,9 @@
 
 <style>
     #password-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(10px); display: flex; justify-content: center; align-items: center; z-index: 100; }
-    #password-button { border-radius: 25px; padding: 0 2rem; height: 50px; cursor: pointer; }
-    #password-button:disabled { background-color: #555; cursor: not-allowed; color: #999; }
+    #password-button { border-radius: 25px; padding: 0 2rem; height: 50px; cursor: pointer; border: 1px solid var(--primary-color); background: transparent; color: var(--primary-color);}
+    #password-button:hover:not(:disabled) { background: var(--primary-color); color: #000; }
+    #password-button:disabled { border-color: #555; color: #777; cursor: not-allowed; }
     .error-message { color: #ff4d4d; margin-top: 1rem; font-weight: bold; }
     .chat-box { width: 100%; height: 60vh; margin-top: 1rem; background-color: rgba(0,0,0,0.2); border: 1px solid var(--border-color-glass); border-radius: 15px; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
     .chat-message { background: var(--surface-color-glass); padding: 0.5rem 1rem; border-radius: 10px; max-width: 80%; word-wrap: break-word; text-align: left; animation: fadeIn 0.3s ease; }
@@ -43,18 +44,7 @@
     .other-message { align-self: flex-start; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .chat-form { display: flex; gap: 0.5rem; margin-top: 1rem; align-items: flex-end; }
-    #message-input, #password-input { 
-        flex-grow: 1; 
-        border-radius: 20px; 
-        color: var(--text-color);
-        resize: none;
-        overflow: hidden;
-        min-height: 50px;
-        line-height: 1.5;
-        padding: 0.8rem 1rem;
-        background-color: rgba(0,0,0,0.2);
-        border: 1px solid var(--border-color-glass);
-    }
+    #message-input, #password-input { flex-grow: 1; border-radius: 20px; color: var(--text-color); resize: none; overflow: hidden; min-height: 50px; line-height: 1.5; padding: 0.8rem 1rem; background-color: rgba(0,0,0,0.2); border: 1px solid var(--border-color-glass); }
     #send-button { background: var(--primary-color); border: none; color: #000; font-weight: bold; font-size: 1.5rem; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; transition: transform 0.2s ease; flex-shrink: 0; }
     #send-button:hover { transform: scale(1.1); }
     .lifetime-controls { display: flex; background: rgba(0,0,0,0.2); border-radius: 25px; padding: 4px; height: 50px; align-items: center; }
@@ -65,62 +55,72 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Элементы экрана пароля
         const passwordOverlay = document.getElementById('password-overlay');
         const passwordForm = document.getElementById('password-form');
         const passwordInput = document.getElementById('password-input');
         const passwordButton = document.getElementById('password-button');
         const passwordError = document.getElementById('password-error');
+        
+        // Элементы экрана чата
         const chatContainer = document.getElementById('chat-container');
-
         const messageForm = document.getElementById('message-form');
         const messageInput = document.getElementById('message-input');
         const messagesContainer = document.getElementById('messages');
         const lifetimeControls = document.querySelector('.lifetime-controls');
         let selectedLifetime = 10;
+        let socket; // Объявляем сокет здесь
 
-        const room_id = "{{ room_id }}";
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws/${room_id}`;
-        const socket = new WebSocket(wsUrl);
+        // Логика активации кнопки пароля
+        passwordInput.addEventListener('input', () => {
+            passwordButton.disabled = passwordInput.value.trim() === '';
+        });
+
+        // --- ИСПРАВЛЕНО: Главная логика при нажатии на "Войти" ---
+        passwordForm.onsubmit = function(event) {
+            event.preventDefault();
+            const password = passwordInput.value;
+            if (!password || !passwordButton.disabled === false) return;
+
+            // Только теперь создаем WebSocket соединение
+            const room_id = "{{ room_id }}";
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws/${room_id}`;
+            socket = new WebSocket(wsUrl);
+
+            // Когда соединение открыто, отправляем пароль
+            socket.onopen = function() {
+                socket.send(JSON.stringify({ "type": "auth", "password": password }));
+            };
+
+            // Настраиваем обработку всех будущих сообщений
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === "auth_success") {
+                    // Если авторизация прошла, показываем чат и переназначаем обработчик
+                    showChat();
+                    socket.onmessage = handleChatMessage;
+                } else if (data.type === "auth_fail") {
+                    passwordError.textContent = data.message;
+                    socket.close(); // Закрываем соединение при неверном пароле
+                } else if (data.type === 'auth_required') {
+                    document.getElementById('password-title').textContent = "Введите пароль";
+                    document.getElementById('password-subtitle').textContent = "Комната защищена паролем.";
+                }
+            };
+
+            socket.onerror = function(error) {
+                passwordError.textContent = "Ошибка соединения с сервером.";
+                console.error("WebSocket error:", error);
+            };
+        };
 
         function showChat() {
             passwordOverlay.style.display = 'none';
             chatContainer.classList.remove('hidden');
         }
-        
-        passwordInput.addEventListener('input', () => {
-            passwordButton.disabled = passwordInput.value.trim() === '';
-        });
 
-        passwordForm.onsubmit = function(event) {
-            event.preventDefault();
-            const password = passwordInput.value;
-            if (!password) return;
-            socket.send(JSON.stringify({ "type": "auth", "password": password }));
-        };
-
-        socket.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === "auth_success") {
-                showChat();
-                socket.onmessage = handleChatMessage;
-            } else if (data.type === "auth_fail") {
-                passwordError.textContent = data.message;
-                passwordInput.value = '';
-                passwordButton.disabled = true;
-            } else if (data.type === "message") {
-                // This handles the edge case where a message arrives before auth UI is determined
-                document.getElementById('password-title').textContent = "Введите пароль";
-                document.getElementById('password-subtitle').textContent = "Комната защищена паролем.";
-            }
-        };
-        
-        messageInput.addEventListener('input', () => {
-            messageInput.style.height = 'auto';
-            messageInput.style.height = (messageInput.scrollHeight) + 'px';
-        });
-
+        // Логика чата (остается без изменений, но теперь вызывается только после авторизации)
         function handleChatMessage(event) {
             const messageData = JSON.parse(event.data);
             if (messageData.type === 'message') {
@@ -133,13 +133,10 @@
             messageElement.classList.add('chat-message');
             messageElement.classList.toggle('my-message', isOwnMessage);
             messageElement.classList.toggle('other-message', !isOwnMessage);
-
             const sanitizedText = messageData.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
             messageElement.innerHTML = sanitizedText;
-
             messagesContainer.appendChild(messageElement);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
             setTimeout(() => {
                 messageElement.style.transition = 'opacity 0.5s ease';
                 messageElement.style.opacity = '0';
@@ -158,19 +155,18 @@
         messageForm.onsubmit = function(event) {
             event.preventDefault();
             const messageText = messageInput.value;
-            if (messageText.trim() === '') return;
-
-            const messageData = {
-                type: "message",
-                text: messageText, 
-                lifetime: selectedLifetime 
-            };
-            
+            if (messageText.trim() === '' || !socket) return;
+            const messageData = { type: "message", text: messageText, lifetime: selectedLifetime };
             socket.send(JSON.stringify(messageData));
             addMessageToUI(messageData, true);
             messageInput.value = '';
             messageInput.style.height = 'auto';
         };
+
+        messageInput.addEventListener('input', () => {
+            messageInput.style.height = 'auto';
+            messageInput.style.height = (messageInput.scrollHeight) + 'px';
+        });
     });
 </script>
 {% endblock %}

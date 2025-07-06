@@ -10,15 +10,14 @@ from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import cloudinary
 import cloudinary.uploader
-import redis.asyncio as redis
 from fastapi.concurrency import run_in_threadpool
+import time
 
 # --- Конфигурация ---
 load_dotenv()
 app = FastAPI()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-redis_url = os.getenv("REDIS_URL")
 
 cloudinary.config(
   cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -40,9 +39,11 @@ translations = {
 MAX_FILE_SIZE = 25 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx", ".zip", ".rar"}
 
+# --- ИЗМЕНЕНИЕ: Хранилище ссылок в памяти вместо Redis ---
+file_links = {} # { "link_id": {"url": "...", "timestamp": ...} }
+
 # --- Менеджер подключений чата ---
 class ConnectionManager:
-    # ... (код ConnectionManager без изменений)
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
         self.room_passwords: Dict[str, str] = {}
@@ -96,7 +97,6 @@ async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
 
-# ИЗМЕНЕНИЕ: Логика загрузки файла
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...)):
     file_extension = os.path.splitext(file.filename)[1].lower()
@@ -107,46 +107,31 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // 1024 // 1024}MB")
     
-    # Создаем временный файл
-    temp_file_path = f"/tmp/{uuid.uuid4()}{file_extension}"
     try:
-        with open(temp_file_path, "wb") as buffer:
-            buffer.write(contents)
-        
-        # Загружаем из временного файла в Cloudinary
-        upload_result = await run_in_threadpool(cloudinary.uploader.upload, temp_file_path, resource_type="auto")
-    
+        upload_result = await run_in_threadpool(cloudinary.uploader.upload, contents, resource_type="auto")
+        file_url = upload_result.get("secure_url")
+        if not file_url: raise HTTPException(status_code=500, detail="Cloudinary did not return a file URL.")
     except Exception as e:
-        print(f"An unexpected error occurred during upload: {e}")
-        raise HTTPException(status_code=500, detail="Произошла непредвиденная ошибка на сервере при загрузке файла.")
-    finally:
-        # Удаляем временный файл в любом случае
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
-
-    file_url = upload_result.get("secure_url")
-    if not file_url:
-        raise HTTPException(status_code=500, detail="Cloudinary did not return a file URL.")
+        raise HTTPException(status_code=500, detail="Ошибка при загрузке файла в облако.")
 
     link_id = str(uuid.uuid4().hex[:10])
-    
-    r_kv = redis.from_url(redis_url, decode_responses=True)
-    await r_kv.setex(link_id, 900, file_url)
-    await r_kv.close()
+    # ИЗМЕНЕНИЕ: Сохраняем в словарь в памяти
+    file_links[link_id] = {"url": file_url, "timestamp": time.time()}
     
     base_url = str(request.base_url).rstrip('/')
     one_time_link = f"{base_url}/file/{link_id}"
     return {"download_link": one_time_link}
 
-
 @app.get("/file/{link_id}")
 async def get_file_redirect(link_id: str):
-    r_kv = redis.from_url(redis_url, decode_responses=True)
-    file_url = await r_kv.get(link_id)
-    if not file_url: raise HTTPException(status_code=404, detail="Link is invalid, has been used, or has expired.")
-    await r_kv.delete(link_id)
-    await r_kv.close()
-    return RedirectResponse(url=file_url)
+    # ИЗМЕНЕНИЕ: Ищем ссылку в словаре в памяти
+    link_info = file_links.pop(link_id, None) # Извлекаем и удаляем
+    
+    # Проверяем, существует ли ссылка и не истек ли ее срок (15 минут)
+    if not link_info or (time.time() - link_info["timestamp"]) > 900:
+        raise HTTPException(status_code=404, detail="Link is invalid or has expired.")
+    
+    return RedirectResponse(url=link_info["url"])
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):

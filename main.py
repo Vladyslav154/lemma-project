@@ -3,6 +3,7 @@ import uuid
 import cloudinary
 import cloudinary.uploader
 import json
+import asyncio
 from typing import Dict, List
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -38,40 +39,14 @@ cloudinary.config(
   secure = True
 )
 
-# Get Redis URL from environment variables for file links
+# Get Redis URL from environment variables
 redis_url = os.getenv("REDIS_URL")
+if not redis_url:
+    raise ValueError("REDIS_URL is not set in the environment")
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-
-
-# --- ИСПРАВЛЕННЫЙ WebSocket Connection Manager (без Redis) ---
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Dict[str, List[WebSocket]] = {}
-
-    async def connect(self, websocket: WebSocket, room_id: str):
-        await websocket.accept()
-        if room_id not in self.active_connections:
-            self.active_connections[room_id] = []
-        self.active_connections[room_id].append(websocket)
-
-    def disconnect(self, websocket: WebSocket, room_id: str):
-        if room_id in self.active_connections and websocket in self.active_connections[room_id]:
-            self.active_connections[room_id].remove(websocket)
-            if not self.active_connections[room_id]:
-                del self.active_connections[room_id]
-
-    # ИЗМЕНЕНИЕ: Добавлен параметр 'sender', чтобы не отправлять сообщение самому себе
-    async def broadcast(self, message: str, room_id: str, sender: WebSocket):
-        if room_id in self.active_connections:
-            for connection in self.active_connections[room_id]:
-                if connection != sender:
-                    await connection.send_text(message)
-
-manager = ConnectionManager()
-
 
 # --- API Endpoints ---
 
@@ -118,13 +93,60 @@ async def get_file_redirect(link_id: str):
     await r_kv.close()
     return RedirectResponse(url=file_url)
 
+# --- WebSocket Logic with Passwords ---
+async def redis_reader(channel: redis.client.PubSub, websocket: WebSocket):
+    async for message in channel.listen():
+        if message['type'] == 'message':
+            await websocket.send_text(message['data'].decode('utf-8'))
+
+async def websocket_reader(websocket: WebSocket, channel: str):
+    r_pub = redis.from_url(redis_url)
+    async for message in websocket.iter_text():
+        await r_pub.publish(channel, message)
+    await r_pub.close()
+
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    await manager.connect(websocket, room_id)
+    await websocket.accept()
+    r = redis.from_url(redis_url, decode_responses=True)
+    channel = f"chat:{room_id}"
+    password_key = f"password:{room_id}"
+
+    # --- Логика пароля ---
+    room_password = await r.get(password_key)
     try:
-        while True:
-            data = await websocket.receive_text()
-            # ИЗМЕНЕНИЕ: Передаем 'websocket' как отправителя
-            await manager.broadcast(data, room_id, websocket)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, room_id)
+        auth_data_str = await websocket.receive_text()
+        auth_data = json.loads(auth_data_str)
+        password = auth_data.get("password")
+
+        if not room_password: # Если пароля для комнаты нет, этот пользователь его устанавливает
+            await r.setex(password_key, 3600, password) # Пароль живет 1 час
+            await websocket.send_text(json.dumps({"type": "auth_success", "message": "Пароль установлен."}))
+        elif password != room_password: # Если пароль есть, но он неверный
+            await websocket.send_text(json.dumps({"type": "auth_fail", "message": "Неверный пароль."}))
+            await websocket.close()
+            await r.close()
+            return
+        else: # Если пароль верный
+            await websocket.send_text(json.dumps({"type": "auth_success", "message": "Доступ разрешен."}))
+
+    except (WebSocketDisconnect, json.JSONDecodeError):
+        await websocket.close()
+        await r.close()
+        return
+
+    # --- Основная логика чата после успешной авторизации ---
+    pubsub = r.pubsub()
+    await pubsub.subscribe(channel)
+
+    consumer_task = asyncio.create_task(redis_reader(pubsub, websocket))
+    producer_task = asyncio.create_task(websocket_reader(websocket, channel))
+    
+    done, pending = await asyncio.wait(
+        [consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED
+    )
+    for task in pending:
+        task.cancel()
+    
+    await pubsub.close()
+    await r.close()

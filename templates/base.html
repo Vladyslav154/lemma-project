@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#58a6ff"/>
     <title>{{ t('app_title') }}</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+    <div id="trial-banner"></div>
+
     <div class="nav-button home-button">
         <a href="/?lang={{ lang }}">🏠 {{ t('home_button') }}</a>
     </div>
 
-    <div class="nav-button lang-switcher">
+    <div class.nav-button lang-switcher">
         <a href="?lang=ru" class="{% if lang == 'ru' %}active{% endif %}">RU</a>
         <span>|</span>
         <a href="?lang=en" class="{% if lang == 'en' %}active{% endif %}">EN</a>
@@ -25,13 +25,24 @@
     </div>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(registration => console.log('Service Worker registered.'))
-                    .catch(error => console.log('Service Worker registration failed:', error));
-            });
-        }
+        document.addEventListener('DOMContentLoaded', () => {
+            const trialKey = localStorage.getItem('lepko_trial_key');
+            const banner = document.getElementById('trial-banner');
+
+            if (!trialKey) {
+                fetch('/start-trial', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.trial_key) {
+                            localStorage.setItem('lepko_trial_key', data.trial_key);
+                            if(banner) {
+                                banner.textContent = '✅ Пробный Pro-доступ на 30 дней активирован!';
+                                banner.classList.add('active');
+                            }
+                        }
+                    });
+            }
+        });
     </script>
 </body>
 </html>

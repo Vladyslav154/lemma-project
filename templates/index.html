@@ -2,16 +2,18 @@
 {% block content %}
 <div class="home-container">
     <div class="brand-block">
-        <h1>{{ t('app_title') }}</h1>
-        <p>{{ t('app_subtitle') }}</p>
+        <h1>{{ t('LepkO') }}</h1>
+        <p>{{ t('Servis') }}</p>
+        <a href="/upgrade?lang={{ lang }}">{{ t('upgrade_link') }} 🚀</a>
+        <a href="#">{{ t('activate_key') }}</a>
     </div>
     <div class="tools-block">
         <a href="/drop?lang={{ lang }}" class="tool-link">
-            <h2>{{ t('drop_title') }}</h2>
+            <h2>{{ t('drop') }}</h2>
             <p>{{ t('drop_description') }}</p>
         </a>
         <a href="/pad?lang={{ lang }}" class="tool-link">
-            <h2>{{ t('pad_title') }}</h2>
+            <h2>{{ t('pad') }}</h2>
             <p>{{ t('pad_description') }}</p>
         </a>
     </div>

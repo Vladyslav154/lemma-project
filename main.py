@@ -91,43 +91,4 @@ async def drop_page(request: Request):
     def t(key: str) -> str: return translations.get(key, key)
     return templates.TemplateResponse("drop.html", {"request": request, "t": t})
 
-@app.get("/pad")
-async def pad_redirect():
-    room_id = str(uuid.uuid4().hex[:8])
-    return RedirectResponse(url=f"/pad/{room_id}")
-
-@app.get("/pad/{room_id}", response_class=HTMLResponse)
-async def pad_room(request: Request, room_id: str):
-    def t(key: str) -> str: return translations.get(key, key)
-    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t})
-
-@app.post("/upload")
-async def upload_file(request: Request, file: UploadFile = File(...)):
-    file_extension = os.path.splitext(file.filename)[1].lower()
-    if file_extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Недопустимый тип файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}")
-    
-    # ИСПРАВЛЕНИЕ: Возвращаем надежный способ проверки размера файла
-    contents = await file.read()
-    if len(contents) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {MAX_FILE_SIZE // 1024 // 1024}MB")
-    
-    # Загрузка в Cloudinary
-    upload_result = cloudinary.uploader.upload(contents, resource_type="auto")
-    file_url = upload_result.get("secure_url")
-    link_id = str(uuid.uuid4().hex[:10])
-    
-    # Сохранение ссылки в Redis
-    r_kv = redis.from_url(redis_url, decode_responses=True)
-    await r_kv.setex(link_id, 900, file_url)
-    await r_kv.close()
-    
-    base_url = str(request.base_url)
-    one_time_link = f"{base_url}file/{link_id}"
-    return {"download_link": one_time_link}
-
-@app.get("/file/{link_id}")
-async def get_file_redirect(link_id: str):
-    r_kv = redis.from_url(redis_url, decode_responses=True)
-    file_url = await r_kv.get(link_id)
-    if not file_url: raise HTTPException(status_code=404, detail="Link is invalid, has been used
+@app

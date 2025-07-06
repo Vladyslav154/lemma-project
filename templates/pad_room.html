@@ -1,31 +1,143 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div id="invite-overlay" class="hidden">
+<div id="password-overlay">
     <div class="form-container">
-        <h1>Пригласить</h1>
-        <p>Покажите этот QR-код собеседнику или отправьте ему одноразовую ссылку.</p>
-        <div id="qrcode-container">
-            <div id="qrcode"></div>
-        </div>
-        <input type="text" id="onetime-link" readonly>
-        <button id="copy-link-btn" class="button">Копировать ссылку</button>
-        <p id="timer"></p>
-        <button id="close-overlay-btn" class="button" style="margin-top: 1rem;">Закрыть</button>
+        <h1 id="password-title">Загрузка...</h1>
+        <p id="password-subtitle">Соединение с комнатой.</p>
+        <form id="password-form" class="chat-form">
+            <input type="password" id="password-input" placeholder="{{ t('password_placeholder') }}" autocomplete="off">
+            <button type="submit" id="password-button" class="button" disabled>{{ t('enter_button') }}</button>
+        </form>
+        <p id="password-error" class="error-message"></p>
     </div>
 </div>
 
-<div class="form-container">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h1>Анонимный чат</h1>
-        <button id="invite-btn" class="button">Пригласить</button>
-    </div>
-    <p>Вы в комнате: <strong>{{ room_id }}</strong></p>
-    <div id="messages" class="chat-box"></div>
-    <form id="message-form" class="chat-form">
+<div id="chat-container" class="hidden">
+    <div class="form-container">
+        <h1>{{ t('pad_page_title') }}</h1>
+        <p>{{ t('pad_room_subtitle') }} <strong>{{ room_id }}</strong>. {{ t('pad_disclaimer') }}</p>
+        
+        <div id="messages" class="chat-box"></div>
+
+        <form id="message-form" class="chat-form">
+            <textarea id="message-input" placeholder="{{ t('message_placeholder') }}" rows="1"></textarea>
+            <div class="lifetime-controls">
+                <button type="button" class="lifetime-btn active" data-lifetime="10">10с</button>
+                <button type="button" class="lifetime-btn" data-lifetime="30">30с</button>
+                <button type="button" class="lifetime-btn" data-lifetime="120">2м</button>
+            </div>
+            <button type="submit" id="send-button" class="button">»</button>
         </form>
+    </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
 <script>
-// ... (новый JavaScript для генерации QR и одноразовой ссылки) ...
+    document.addEventListener('DOMContentLoaded', function() {
+        const passwordOverlay = document.getElementById('password-overlay');
+        const passwordForm = document.getElementById('password-form');
+        const passwordInput = document.getElementById('password-input');
+        const passwordButton = document.getElementById('password-button');
+        const passwordError = document.getElementById('password-error');
+        const passwordTitle = document.getElementById('password-title');
+        const passwordSubtitle = document.getElementById('password-subtitle');
+        const chatContainer = document.getElementById('chat-container');
+        const messageForm = document.getElementById('message-form');
+        const messageInput = document.getElementById('message-input');
+        const messagesContainer = document.getElementById('messages');
+        const lifetimeControls = document.querySelector('.lifetime-controls');
+        let selectedLifetime = 10;
+        
+        const room_id = "{{ room_id }}";
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/${room_id}`;
+        const socket = new WebSocket(wsUrl);
+
+        function showChat() {
+            passwordOverlay.classList.add('hidden');
+            chatContainer.classList.remove('hidden');
+            messageInput.focus();
+        }
+
+        passwordInput.addEventListener('input', () => {
+            passwordButton.disabled = passwordInput.value.trim() === '';
+        });
+
+        passwordForm.onsubmit = function(event) {
+            event.preventDefault();
+            const password = passwordInput.value;
+            if (passwordButton.disabled) return;
+            socket.send(JSON.stringify({ "type": "auth", "password": password }));
+        };
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === "auth_required") {
+                passwordForm.style.display = 'flex';
+                if (data.action === 'set') {
+                    passwordTitle.textContent = "{{ t('password_set_title') }}";
+                    passwordSubtitle.textContent = "{{ t('password_set_subtitle') }}";
+                } else {
+                    passwordTitle.textContent = "{{ t('password_enter_title') }}";
+                    passwordSubtitle.textContent = "{{ t('password_enter_subtitle') }}";
+                }
+            } else if (data.type === "auth_success") {
+                showChat();
+                socket.onmessage = handleChatMessage;
+            } else if (data.type === "auth_fail") {
+                passwordError.textContent = data.message;
+                passwordInput.value = '';
+                passwordButton.disabled = true;
+            }
+        };
+        
+        socket.onerror = (error) => {
+            console.error("WebSocket Error:", error);
+            passwordTitle.textContent = "Ошибка соединения";
+            passwordSubtitle.style.display = 'none';
+        };
+
+        function handleChatMessage(event) {
+            const messageData = JSON.parse(event.data);
+            if (messageData.type === 'message') {
+                addMessageToUI(messageData, false);
+            }
+        }
+        
+        function addMessageToUI(messageData, isOwnMessage = false) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('chat-message');
+            messageElement.classList.toggle('my-message', isOwnMessage);
+            messageElement.classList.toggle('other-message', !isOwnMessage);
+            const sanitizedText = messageData.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            messageElement.innerHTML = sanitizedText;
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            setTimeout(() => {
+                messageElement.style.transition = 'opacity 0.5s ease';
+                messageElement.style.opacity = '0';
+                setTimeout(() => messageElement.remove(), 500);
+            }, messageData.lifetime * 1000);
+        }
+
+        lifetimeControls.addEventListener('click', (e) => {
+            if (e.target.classList.contains('lifetime-btn')) {
+                lifetimeControls.querySelectorAll('.lifetime-btn').forEach(btn => btn.classList.remove('active'));
+                e.target.classList.add('active');
+                selectedLifetime = parseInt(e.target.dataset.lifetime, 10);
+            }
+        });
+
+        messageForm.onsubmit = function(event) {
+            event.preventDefault();
+            const messageText = messageInput.value;
+            if (messageText.trim() === '') return;
+            const messageData = { type: "message", text: messageText, lifetime: selectedLifetime };
+            socket.send(JSON.stringify(messageData));
+            addMessageToUI(messageData, true);
+            messageInput.value = '';
+        };
+    });
 </script>
 {% endblock %}

@@ -2,5 +2,14 @@ services:
   - type: web
     name: lemma-project
     env: docker
-    plan: free # Или ваш платный тариф
-    healthCheckPath: /?lang=ru
+    plan: starter
+    healthCheckPath: /
+    envVars:
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: REDIS_URL
+        sync: false

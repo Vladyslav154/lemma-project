@@ -1,9 +1,13 @@
 services:
   - type: web
     name: lemma-project
-    env: python
-    plan: free # Или ваш платный тариф
-    pythonVersion: "3.11"
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn main:app --host 0.0.0.0 --port 10000"
+    env: docker
+    plan: starter # Используйте ваш платный план
     healthCheckPath: /?lang=ru
+    envVars:
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false

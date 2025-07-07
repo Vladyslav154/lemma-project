@@ -1,58 +1,64 @@
 <!DOCTYPE html>
 <html lang="{{ lang }}">
 <head>
-    </head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('LepkO') }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
 <body>
-    <div class="main-content">
-        {% block content %}{% endblock %}
+    <div id="trial-banner"></div>
+
+    <div class="nav-button home-button">
+        <a href="/?lang={{ lang }}">🏠 {{ t('home_button') }}</a>
+    </div>
+    <div class="nav-button about-button">
+        <a href="/about?lang={{ lang }}">ℹ️ {{ t('about_button') }}</a>
     </div>
 
-    <div id="pro-key-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>{{ t('activate_key') }}</h2>
-            <p>{{ t('enter_pro_key_subtitle') }}</p>
-            <input type="text" id="pro-key-input" placeholder="PRO-XXXX-XXXX-XXXX">
-            <button id="activate-pro-key-button" class="button">{{ t('activate_button') }}</button>
-        </div>
+    <div class="nav-button lang-switcher">
+        <a href="?lang=ru" class="{% if lang == 'ru' %}active{% endif %}">RU</a>
+        <span>|</span>
+        <a href="?lang=en" class="{% if lang == 'en' %}active{% endif %}">EN</a>
     </div>
-    
+
+    <div class="main-content">
+        {% block content %}
+        {% endblock %}
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // ... (логика триала)
+            const trialKey = localStorage.getItem('lepko_trial_key');
+            const proKey = localStorage.getItem('lepko_pro_key');
+            const banner = document.getElementById('trial-banner');
 
-            // --- Логика активации Pro-ключа ---
-            const modal = document.getElementById('pro-key-modal');
-            const activateButtons = document.querySelectorAll('.activate-key-link');
-            const closeModalButton = document.querySelector('.close-modal');
-            const activateProKeyButton = document.getElementById('activate-pro-key-button');
-            const proKeyInput = document.getElementById('pro-key-input');
+            if (banner && !trialKey && !proKey) {
+                fetch('/start-trial', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.trial_key) {
+                            localStorage.setItem('lepko_trial_key', data.trial_key);
+                            banner.textContent = '✅ Пробный Pro-доступ на 30 дней активирован!';
+                            banner.classList.add('active');
+                            setTimeout(() => { banner.classList.remove('active'); }, 5000);
+                        }
+                    }).catch(err => console.error("Failed to start trial:", err));
+            }
 
-            activateButtons.forEach(button => {
-                button.addEventListener('click', (e) => {
+            const activateButton = document.querySelector('.activate-key-link');
+            if (activateButton) {
+                activateButton.addEventListener('click', (e) => {
                     e.preventDefault();
-                    modal.classList.remove('hidden');
+                    const enteredKey = prompt("Пожалуйста, введите ваш Pro ключ:");
+                    if (enteredKey && enteredKey.startsWith("PRO-")) {
+                        localStorage.setItem('lepko_pro_key', enteredKey);
+                        localStorage.removeItem('lepko_trial_key');
+                        alert("Pro-ключ принят и сохранен в этом браузере!");
+                    } else if (enteredKey) {
+                        alert("Неверный формат ключа.");
+                    }
                 });
-            });
-
-            const closeModal = () => modal.classList.add('hidden');
-            closeModalButton.addEventListener('click', closeModal);
-            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-
-            activateProKeyButton.addEventListener('click', () => {
-                const enteredKey = proKeyInput.value.trim();
-                if (enteredKey && enteredKey.startsWith("PRO-")) {
-                    localStorage.setItem('lepko_pro_key', enteredKey);
-                    localStorage.removeItem('lepko_trial_key');
-                    alert("Pro-ключ принят!");
-                    location.reload();
-                } else {
-                    alert("Неверный формат ключа.");
-                }
-            });
-            
-            if (localStorage.getItem('lepko_pro_key')) {
-                // ... (логика отображения Pro-статуса)
             }
         });
     </script>

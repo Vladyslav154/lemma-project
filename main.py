@@ -3,7 +3,7 @@ import uuid
 import json
 import asyncio
 from typing import Dict, List, Optional
-from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect, Query, Header
+from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -114,31 +114,61 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
     is_pro = False
     max_size = MAX_FILE_SIZE
     if authorization and authorization.startswith("Bearer "):
-        trial_key = authorization.split("Bearer ")[1]
-        key_info = trial_keys.get(trial_key)
-        if key_info and (time.time() - key_info["timestamp"]) < (30 * 24 * 60 * 60):
-            is_pro = True
-            max_size = PRO_MAX_FILE_SIZE
-        else:
-            trial_keys.pop(trial_key, None)
+        key = authorization.split("Bearer ")[1]
+        if key.startswith("PRO-"):
+             # В будущем здесь будет проверка Pro ключа в Redis
+             is_pro = True
+        else: # Проверяем триальный ключ
+            key_info = trial_keys.get(key)
+            if key_info and (time.time() - key_info["timestamp"]) < (30 * 24 * 60 * 60):
+                is_pro = True
+            else:
+                trial_keys.pop(key, None)
+
+    if is_pro:
+        max_size = PRO_MAX_FILE_SIZE
+    
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Недопустимый тип файла. Разрешены: {', '.join(ALLOWED_EXTENSIONS)}")
+    
     contents = await file.read()
     if len(contents) > max_size:
         raise HTTPException(status_code=413, detail=f"Файл слишком большой. Максимальный размер: {max_size // 1024 // 1024}MB")
+    
     try:
         upload_result = await run_in_threadpool(cloudinary.uploader.upload, contents, resource_type="auto")
         file_url = upload_result.get("secure_url")
         if not file_url: raise HTTPException(status_code=500, detail="Cloudinary did not return a file URL.")
     except Exception as e:
         raise HTTPException(status_code=500, detail="Ошибка при загрузке файла в облако.")
+
     link_id = str(uuid.uuid4().hex[:10])
     file_links[link_id] = {"url": file_url, "timestamp": time.time()}
+    
     base_url = str(request.base_url).rstrip('/')
     one_time_link = f"{base_url}/file/{link_id}"
     return {"download_link": one_time_link}
 
 @app.get("/file/{link_id}")
 async def get_file_redirect(link_id: str):
-    link_info = file_links.pop
+    link_info = file_links.pop(link_id, None)
+    if not link_info or (time.time() - link_info["timestamp"]) > 900:
+        raise HTTPException(status_code=404, detail="Link is invalid or has expired.")
+    return RedirectResponse(url=link_info["url"])
+
+@app.websocket("/ws/{room_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: str):
+    await manager.connect(websocket, room_id)
+    try:
+        auth_data_str = await websocket.receive_text()
+        auth_data = json.loads(auth_data_str)
+        if auth_data.get("type") == "auth":
+            password = auth_data.get("password")
+            is_authed = await manager.auth_and_join(websocket, room_id, password)
+            if not is_authed: return
+        else:
+            await websocket.close()
+            return
+        while True:
+            data = await websocket.receive_text

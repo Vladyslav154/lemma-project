@@ -5,3 +5,4 @@ cloudinary
 jinja2
 python-multipart
 redis
+pydantic

@@ -8,29 +8,23 @@
 </head>
 <body>
     <div id="trial-banner"></div>
-
     <div class="nav-button home-button">
         <a href="/?lang={{ lang }}">🏠 {{ t('home_button') }}</a>
     </div>
-
     <div class="nav-button lang-switcher">
         <a href="?lang=ru" class="{% if lang == 'ru' %}active{% endif %}">RU</a>
         <span>|</span>
         <a href="?lang=en" class="{% if lang == 'en' %}active{% endif %}">EN</a>
     </div>
-
     <div class="main-content">
         {% block content %}
         {% endblock %}
     </div>
-
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const trialKey = localStorage.getItem('lepko_trial_key');
             const proKey = localStorage.getItem('lepko_pro_key');
             const banner = document.getElementById('trial-banner');
-
-            // Запрашиваем триальный ключ, только если нет ни триального, ни постоянного Pro ключа
             if (banner && !trialKey && !proKey) {
                 fetch('/start-trial', { method: 'POST' })
                     .then(response => response.json())
@@ -39,16 +33,10 @@
                             localStorage.setItem('lepko_trial_key', data.trial_key);
                             banner.textContent = '✅ Пробный Pro-доступ на 30 дней активирован!';
                             banner.classList.add('active');
-                            // Скрываем баннер через 5 секунд
-                            setTimeout(() => {
-                                banner.classList.remove('active');
-                            }, 5000);
+                            setTimeout(() => { banner.classList.remove('active'); }, 5000);
                         }
-                    })
-                    .catch(err => console.error("Failed to start trial:", err));
+                    }).catch(err => console.error("Failed to start trial:", err));
             }
-
-            // Логика активации Pro-ключа
             const activateButton = document.querySelector('.activate-key-link');
             if (activateButton) {
                 activateButton.addEventListener('click', (e) => {
@@ -56,7 +44,6 @@
                     const enteredKey = prompt("Пожалуйста, введите ваш Pro ключ:");
                     if (enteredKey && enteredKey.startsWith("PRO-")) {
                         localStorage.setItem('lepko_pro_key', enteredKey);
-                        // Удаляем триальный ключ, так как Pro вечный
                         localStorage.removeItem('lepko_trial_key');
                         alert("Pro-ключ принят и сохранен в этом браузере!");
                     } else if (enteredKey) {

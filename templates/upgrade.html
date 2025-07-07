@@ -1,77 +1,44 @@
 {% extends "base.html" %}
-
 {% block content %}
 <div class="form-container">
-    <h1>{{ t('pro_title') }}</h1>
-    <p>{{ t('pro_subtitle') }}</p>
-
-    <div class="pricing-block">
-        <div class="plan" data-price="24">
-            <h2>$24</h2>
-            <p>/ {{ t('monthly_plan') }}</p>
-        </div>
-        <div class="plan active" data-price="190">
-             <h2>$190</h2>
-            <p>/ {{ t('yearly_plan') }}</p>
-        </div>
-    </div>
-
-    <div class="pro-features">
-        <h3>{{ t('pro_features_title') }}</h3>
-        <ul>
-            <li>✅ {{ t('pro_feature_1') }}</li>
-            <li>✅ {{ t('pro_feature_2') }}</li>
-            <li>✅ {{ t('pro_feature_3') }}</li>
-            <li>✅ {{ t('pro_feature_4') }}</li>
-        </ul>
-    </div>
-
     <div class="payment-instructions">
-        <h3>{{ t('how_to_get_pro') }}</h3>
-        <p>{{ t('payment_info') }}</p>
-        <ol>
-            <li>{{ t('payment_step_1') }}</li>
-            <li class="wallet-address">44x3A3rWf4zB7a... (здесь будет ваш полный Monero адрес)</li>
-            <li>{{ t('payment_step_2') }}</li>
-        </ol>
-
         <form id="payment-form" class="chat-form">
             <input type="text" id="txn-id" placeholder="{{ t('txn_id_placeholder') }}">
             <button type="submit" class="button">{{ t('verify_payment_button') }}</button>
         </form>
-        <p id="payment-status"></p>
+        <p id="payment-status" style="font-weight: bold; margin-top: 1rem;"></p>
     </div>
 </div>
 
 <style>
-    .pricing-block { display: flex; justify-content: center; gap: 2rem; margin: 2rem 0; }
-    .plan { background: var(--surface-color); border: 1px solid var(--border-color); padding: 1.5rem; border-radius: 8px; width: 180px; cursor: pointer; transition: all 0.2s ease-in-out; }
-    .plan:not(.active) { opacity: 0.6; }
-    .plan.active { border-color: var(--primary-color); transform: scale(1.05); box-shadow: 0 0 15px var(--primary-color); }
-    .plan h2 { font-size: 2.5rem; color: var(--primary-color); }
-    .pro-features { text-align: left; margin: 2rem 0; padding: 1.5rem; background: rgba(88, 166, 255, 0.05); border-radius: 8px; }
-    .pro-features h3 { margin-bottom: 1rem; }
-    .pro-features ul { list-style: none; padding-left: 0; }
-    .pro-features ul li { margin-bottom: 0.5rem; }
-    .payment-instructions { margin-top: 2rem; text-align: left; }
-    .payment-instructions ol { list-style-position: inside; padding-left: 0; }
-    .wallet-address { background: #000; padding: 1rem; border-radius: 6px; font-family: monospace; word-wrap: break-word; margin: 1rem 0; }
+    /* ... (стили) ... */
 </style>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const plans = document.querySelectorAll('.plan');
-        plans.forEach(plan => {
-            plan.addEventListener('click', () => {
-                plans.forEach(p => p.classList.remove('active'));
-                plan.classList.add('active');
-            });
-        });
+    document.getElementById('payment-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const txnId = document.getElementById('txn-id').value;
+        const statusEl = document.getElementById('payment-status');
+        if (!txnId) return;
 
-        const paymentForm = document.getElementById('payment-form');
-        paymentForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            // ... (JS логика остается без изменений)
+        statusEl.textContent = "Проверяем платеж...";
+        
+        fetch('/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ txn_id: txnId })
+        })
+        .then(response => {
+            if (!response.ok) { throw new Error('Ошибка верификации'); }
+            return response.json();
+        })
+        .then(data => {
+            if(data.pro_key) {
+                statusEl.innerHTML = `Платеж подтвержден! Ваш Pro ключ: <br><strong>${data.pro_key}</strong><br>Сохраните его!`;
+            }
+        })
+        .catch(error => {
+            statusEl.textContent = `Ошибка: ${error.message}`;
         });
     });
 </script>

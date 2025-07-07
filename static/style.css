@@ -3,27 +3,34 @@
 
 /* Переменные */
 :root {
-    --bg-color: #0d1117;
-    --text-color: #c9d1d9;
-    --primary-color: #58a6ff;
-    --border-color: #30363d;
-    --surface-color: #161b22;
+    --text-color: #e0e0e0;
+    --primary-color: #00f2ea; /* Бирюзовый */
+    --secondary-color: #9444e2; /* Фиолетовый */
+    --surface-color-glass: rgba(30, 30, 30, 0.4);
+    --border-color-glass: rgba(255, 255, 255, 0.1);
 }
 
-/* --- Фон с сеткой --- */
+/* Анимация фона "Северное сияние" */
+@keyframes gradient-animation {
+	0% { background-position: 0% 50%; }
+	50% { background-position: 100% 50%; }
+	100% { background-position: 0% 50%; }
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
 body {
-    background-color: var(--bg-color);
-    background-image: linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
-    background-size: 30px 30px;
     font-family: 'Inter', sans-serif;
     color: var(--text-color);
-    display: flex;
-    justify-content: center;
-    align-items: center;
     min-height: 100vh;
-    padding: 2rem;
     text-align: center;
+    background: linear-gradient(-45deg, #0d0c1d, #0f1d1c, #0c1d2e, #18131a);
+	background-size: 400% 400%;
+	animation: gradient-animation 20s ease infinite;
 }
 
 .main-content {
@@ -36,71 +43,67 @@ body {
     width: 100%;
 }
 
-h1, h2 { color: #f0f6fc; font-weight: 700; }
-h1 { font-size: 3rem; color: var(--primary-color); }
+h1, h2 { color: #ffffff; font-weight: 700; }
+h1 { font-size: 3rem; text-shadow: 0 0 10px var(--primary-color), 0 0 20px var(--primary-color); }
 p { margin-top: 0.5rem; opacity: 0.8; }
-a { color: var(--primary-color); text-decoration: none; transition: color 0.2s ease; }
-a:hover { color: #82c3ff; }
+a { color: var(--primary-color); text-decoration: none; transition: all 0.2s ease-in-out; }
+a:hover { color: #ffffff; text-shadow: 0 0 5px var(--primary-color); }
 
 .home-container, .form-container { max-width: 650px; width: 100%; }
 .brand-block h1 { margin-bottom: 1rem; }
 .brand-block p { font-size: 1.2rem; margin-bottom: 2rem; }
 .brand-block a { margin: 0 1rem; }
 
-.tools-block {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1rem;
-    margin-top: 3rem;
-}
+.tools-block { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin-top: 4rem; }
 
+/* Эффект "матового стекла" */
 .tool-link, .form-container {
-    background: var(--surface-color);
-    border: 1px solid var(--border-color);
+    background: var(--surface-color-glass);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-color-glass);
     padding: 2rem;
-    border-radius: 6px;
-    transition: all 0.2s ease;
+    border-radius: 15px;
+    transition: all 0.3s ease;
 }
 
 .tool-link:hover {
-    transform: translateY(-3px);
-    border-color: var(--primary-color);
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2), 0 0 20px var(--secondary-color);
+    border-color: rgba(148, 68, 226, 0.5);
 }
 
-#drop-zone { margin-top: 2rem; padding: 3rem; border: 1px dashed var(--border-color); border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
-#drop-zone:hover, #drop-zone.drag-over { border-color: var(--primary-color); background-color: rgba(88, 166, 255, 0.1); }
-.link-wrapper { display: flex; margin-top: 1rem; }
-.hidden { display: none !important; }
+.nav-button {
+    position: absolute;
+    background: var(--surface-color-glass);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-color-glass);
+    border-radius: 20px;
+    padding: 0.5rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    z-index: 10;
+}
+.home-button { top: 1.5rem; left: 2rem; }
+.lang-switcher { top: 1.5rem; right: 2rem; }
+.nav-button a { color: var(--text-color); text-decoration: none; font-weight: bold; padding: 0.2rem 0.5rem; border-radius: 15px; }
+.lang-switcher a.active { background-color: var(--primary-color); color: #000; cursor: default; }
+.lang-switcher span { opacity: 0.3; }
 
-input[type="text"], input[type="password"], textarea {
-    width: 100%;
-    padding: 0.8rem;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-color);
-    color: var(--text-color);
-    font-family: 'Inter', sans-serif;
-    font-size: 1rem;
+#trial-banner {
+    position: fixed;
+    top: -100px; 
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--primary-color);
+    color: #000;
+    padding: 1rem 2rem;
+    border-radius: 0 0 10px 10px;
+    font-weight: bold;
+    z-index: 1000;
+    transition: top 0.5s ease-in-out;
 }
 
-button, .button {
-    padding: 0.7rem 1.5rem;
-    border: 1px solid var(--primary-color);
-    background-color: var(--primary-color);
-    color: var(--bg-color);
-    font-weight: 700;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-button:hover:not(:disabled) { opacity: 0.8; }
-
-.chat-box { width: 100%; height: 60vh; margin-top: 1rem; background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem; }
-.chat-message { background: var(--surface-color); padding: 0.5rem 1rem; border-radius: 10px; max-width: 80%; word-wrap: break-word; text-align: left; }
-.my-message { align-self: flex-end; background: var(--primary-color); color: #0d1117; }
-.other-message { align-self: flex-start; }
-.chat-form { display: flex; gap: 0.5rem; margin-top: 1rem; align-items: flex-end; }
-#message-input, #password-input { min-height: 50px; }
-#send-button { width: 50px; height: 50px; border-radius: 6px; font-size: 1.5rem; flex-shrink: 0; }
-.lifetime-controls { display: flex; background: var(--surface-color); border-radius: 6px; padding: 4px; height: 50px; align-items: center; border: 1px solid var(--border-color); }
-.lifetime-btn { background: transparent; border: none; color: var(--text-color); padding: 0.5rem 1rem
+#trial-banner.active { top: 0; }

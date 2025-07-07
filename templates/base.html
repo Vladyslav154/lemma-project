@@ -12,7 +12,6 @@
     <div class="nav-button home-button">
         <a href="/?lang={{ lang }}">🏠 {{ t('home_button') }}</a>
     </div>
-    
     <div class="nav-button about-button">
         <a href="/about?lang={{ lang }}">ℹ️ {{ t('about_button') }}</a>
     </div>
@@ -28,22 +27,11 @@
         {% endblock %}
     </div>
 
-    <div id="pro-key-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <h2>{{ t('activate_key') }}</h2>
-            <p>{{ t('enter_pro_key_subtitle') }}</p>
-            <input type="text" id="pro-key-input" placeholder="PRO-XXXX-XXXX-XXXX">
-            <button id="activate-pro-key-button" class="button">{{ t('activate_button') }}</button>
-        </div>
-    </div>
-
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const trialKey = localStorage.getItem('lepko_trial_key');
             const proKey = localStorage.getItem('lepko_pro_key');
             const banner = document.getElementById('trial-banner');
-
             if (banner && !trialKey && !proKey) {
                 fetch('/start-trial', { method: 'POST' })
                     .then(response => response.json())
@@ -56,43 +44,19 @@
                         }
                     }).catch(err => console.error("Failed to start trial:", err));
             }
-
-            const modal = document.getElementById('pro-key-modal');
-            const activateButtons = document.querySelectorAll('.activate-key-link');
-            const closeModalButton = document.querySelector('.close-modal');
-            const activateProKeyButton = document.getElementById('activate-pro-key-button');
-            const proKeyInput = document.getElementById('pro-key-input');
-            
-            if (modal) {
-                activateButtons.forEach(button => {
-                    button.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        modal.classList.remove('hidden');
-                    });
-                });
-
-                const closeModal = () => modal.classList.add('hidden');
-                closeModalButton.addEventListener('click', closeModal);
-                modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-
-                activateProKeyButton.addEventListener('click', () => {
-                    const enteredKey = proKeyInput.value.trim();
+            const activateButton = document.querySelector('.activate-key-link');
+            if (activateButton) {
+                activateButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const enteredKey = prompt("Пожалуйста, введите ваш Pro ключ:");
                     if (enteredKey && enteredKey.startsWith("PRO-")) {
                         localStorage.setItem('lepko_pro_key', enteredKey);
                         localStorage.removeItem('lepko_trial_key');
-                        alert("Pro-ключ принят!");
-                        location.reload();
-                    } else {
+                        alert("Pro-ключ принят и сохранен в этом браузере!");
+                    } else if (enteredKey) {
                         alert("Неверный формат ключа.");
                     }
                 });
-            }
-            
-            if (localStorage.getItem('lepko_pro_key')) {
-                const brandBlock = document.querySelector('.brand-block h1');
-                if (brandBlock) {
-                    brandBlock.innerHTML += ' <span class="pro-badge">PRO</span>';
-                }
             }
         });
     </script>

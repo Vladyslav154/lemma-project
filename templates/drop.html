@@ -8,7 +8,7 @@
         <div id="drop-zone">
             <p>{{ t('drop_zone_text') }}</p>
         </div>
-        <button id="select-file-button" class="button" style="margin-top: 1rem;">Выбрать файл</button>
+        <button id="select-file-button" class="button" style="margin-top: 1rem;">{{ t('drop_zone_text').split(' или ')[1] }}</button>
         <input type="file" id="file-input" hidden>
         
         <div id="progress-container" class="hidden">
@@ -35,8 +35,6 @@
     #qrcode-container { margin: 1.5rem auto; padding: 1rem; background: #ffffff; border-radius: 8px; display: inline-block; }
     .small-text { font-size: 0.8rem; opacity: 0.7; }
     .send-another-link { margin-top: 1rem; display: inline-block; }
-    #drop-zone.drag-over { border-color: var(--primary-color); background-color: rgba(88, 166, 255, 0.1); }
-    .link-wrapper button { border-radius: 0 6px 6px 0; }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
@@ -45,7 +43,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
-    const selectFileButton = document.getElementById('select-file-button'); // Находим новую кнопку
+    const selectFileButton = document.getElementById('select-file-button');
     const uploadContainer = document.getElementById('upload-container');
     const resultContainer = document.getElementById('result-container');
     const downloadLinkInput = document.getElementById('download-link');
@@ -57,6 +55,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const originalCopyText = copyButton.textContent;
     const copiedText = "{{ t('copied_button') }}";
+    
+    const trialKey = localStorage.getItem('lepko_trial_key');
+    const proKey = localStorage.getItem('lepko_pro_key');
+    const authToken = proKey ? `Bearer ${proKey}` : (trialKey ? `Bearer ${trialKey}` : null);
 
     function handleFile(file) {
         if (!file) return;
@@ -67,15 +69,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData();
         formData.append('file', file);
 
+        const headers = {};
+        if (authToken) {
+            headers['Authorization'] = authToken;
+        }
+
         fetch('/upload', {
             method: 'POST',
+            headers: headers,
             body: formData
         })
         .then(response => {
             if (!response.ok) {
                 return response.json().then(err => { 
-                    const errorMessage = err.detail || `Server responded with status: ${response.status}`;
-                    throw new Error(errorMessage);
+                    throw new Error(err.detail || `Server Error: ${response.status}`);
                 });
             }
             return response.json();
@@ -85,7 +92,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressContainer.classList.add('hidden');
                 resultContainer.classList.remove('hidden');
                 downloadLinkInput.value = data.download_link;
-
                 qrcodeContainer.innerHTML = "";
                 new QRCode(qrcodeContainer, {
                     text: data.download_link,
@@ -94,21 +100,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     correctLevel : QRCode.CorrectLevel.H
                 });
             } else {
-                throw new Error('Failed to get download link from server.');
+                throw new Error('Failed to get download link.');
             }
         })
         .catch(error => {
-            console.error('Upload Error:', error);
-            alert('Ошибка загрузки: ' + error.message);
+            alert('Ошибка: ' + error.message);
             uploadContainer.style.display = 'block';
             progressContainer.classList.add('hidden');
         });
     }
 
-    // Привязка событий
     dropZone.addEventListener('click', () => fileInput.click());
-    selectFileButton.addEventListener('click', () => fileInput.click()); // Новая кнопка делает то же самое
-
+    selectFileButton.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
     dropZone.addEventListener('drop', (e) => {

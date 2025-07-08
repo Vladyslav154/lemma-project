@@ -5,10 +5,10 @@
     <div class="form-container" id="password-box">
         <h1 id="password-title"></h1>
         <p id="password-subtitle"></p>
-        <div class="chat-form">
+        <form id="password-form" class="chat-form" style="display: none;">
             <input type="password" id="password-input" placeholder="{{ t('password_placeholder') }}">
-            <button id="password-button" class="button">{{ t('enter_button') }}</button>
-        </div>
+            <button type="submit" id="password-button" class="button">{{ t('enter_button') }}</button>
+        </form>
         <p id="password-error" class="error-message hidden"></p>
     </div>
 </div>
@@ -29,64 +29,27 @@
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const passwordOverlay = document.getElementById('password-overlay');
-        const passwordBox = document.getElementById('password-box');
-        const passwordTitle = document.getElementById('password-title');
-        const passwordSubtitle = document.getElementById('password-subtitle');
+        const passwordForm = document.getElementById('password-form');
         const passwordInput = document.getElementById('password-input');
         const passwordButton = document.getElementById('password-button');
         const passwordError = document.getElementById('password-error');
+        const passwordTitle = document.getElementById('password-title');
+        const passwordSubtitle = document.getElementById('password-subtitle');
+        
         const chatContainer = document.getElementById('chat-container');
         const chatBox = document.getElementById('chat-box');
         const messageForm = document.getElementById('message-form');
         const messageInput = document.getElementById('message-input');
-        const sendButton = document.getElementById('send-button');
+        
         const roomId = "{{ room_id }}";
-        const lang = "{{ lang }}";
-        let ws;
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${wsProtocol}//${window.location.host}/ws/${roomId}`;
+        const socket = new WebSocket(wsUrl);
 
-        const connect = () => {
-            const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${proto}//${window.location.host}/ws/${roomId}`);
-
-            ws.onopen = () => {
-                console.log("WebSocket connected");
-            };
-
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-
-                if (data.type === 'auth_required') {
-                    passwordOverlay.classList.remove('hidden');
-                    if (data.action === 'set') {
-                        passwordTitle.textContent = "{{ t('password_set_title') }}";
-                        passwordSubtitle.textContent = "{{ t('password_set_subtitle') }}";
-                    } else {
-                        passwordTitle.textContent = "{{ t('password_enter_title') }}";
-                        passwordSubtitle.textContent = "{{ t('password_enter_subtitle') }}";
-                    }
-                } else if (data.type === 'auth_success') {
-                    passwordOverlay.classList.add('hidden');
-                    chatContainer.classList.remove('hidden');
-                } else if (data.type === 'auth_fail') {
-                    passwordError.textContent = "Неверный пароль.";
-                    passwordError.classList.remove('hidden');
-                    passwordInput.focus();
-                } else {
-                    const messageElement = document.createElement('div');
-                    messageElement.classList.add('chat-message', 'other-message');
-                    messageElement.textContent = data.message;
-                    chatBox.appendChild(messageElement);
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                }
-            };
-
-            ws.onclose = () => {
-                console.log("WebSocket disconnected");
-            };
-
-            ws.onerror = (error) => {
-                console.error("WebSocket error:", error);
-            };
+        const showChat = () => {
+            passwordOverlay.classList.add('hidden');
+            chatContainer.classList.remove('hidden');
+            messageInput.focus();
         };
 
         const authenticate = () => {
@@ -103,26 +66,3 @@
                 e.preventDefault();
                 authenticate();
             }
-        });
-
-        messageForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const message = messageInput.value;
-            if (message && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ message: message }));
-
-                const messageElement = document.createElement('div');
-                messageElement.classList.add('chat-message', 'my-message');
-                messageElement.textContent = message;
-                chatBox.appendChild(messageElement);
-                chatBox.scrollTop = chatBox.scrollHeight;
-
-                messageInput.value = '';
-                messageInput.focus();
-            }
-        });
-
-        connect();
-    });
-</script>
-{% endblock %}

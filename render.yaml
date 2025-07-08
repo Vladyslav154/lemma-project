@@ -1,12 +1,12 @@
 services:
   - type: web
-    name: lepko
-    env: python
-    plan: starter # Убедитесь, что это ваш платный тариф
-    pythonVersion: "3.11"
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "uvicorn main:app --host 0.0.0.0 --port 10000"
-    healthCheckPath: /
+    name: lepko-app
+    env: docker
+    plan: starter # Убедитесь, что здесь указан ваш платный тариф
+    healthCheckPath: /?lang=ru
+    domains:
+      - lepko.chat
+      - www.lepko.chat
     envVars:
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
@@ -14,5 +14,7 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
-      - key: REDIS_URL # Если вы решите использовать Redis
-        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: lepko-redis # Убедитесь, что это имя вашего Redis-сервиса на Render

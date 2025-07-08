@@ -3,8 +3,9 @@ import uuid
 import json
 import asyncio
 from typing import Dict, List, Optional
+from pydantic import BaseModel
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect, Query, Header
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -12,11 +13,13 @@ import cloudinary
 import cloudinary.uploader
 from fastapi.concurrency import run_in_threadpool
 import time
+import redis.asyncio as redis
 
 # --- Конфигурация ---
 load_dotenv()
 app = FastAPI()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+redis_url = os.getenv("REDIS_URL")
 cloudinary.config(
   cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
   api_key = os.getenv("CLOUDINARY_API_KEY"),
@@ -36,44 +39,11 @@ translations = {
 MAX_FILE_SIZE = 25 * 1024 * 1024
 PRO_MAX_FILE_SIZE = 100 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".docx", ".zip", ".rar"}
-file_links = {}
-trial_keys = {}
-pro_keys = set() # Простое хранилище для активированных Pro ключей
+trial_keys = {} # Триал ключи можно хранить в памяти, они не так критичны
 
-# --- Менеджер подключений чата ---
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Dict[str, List[WebSocket]] = {}
-        self.room_passwords: Dict[str, str] = {}
-    async def connect(self, websocket: WebSocket, room_id: str):
-        await websocket.accept()
-        if room_id in self.room_passwords: await websocket.send_text(json.dumps({"type": "auth_required", "action": "enter"}))
-        else: await websocket.send_text(json.dumps({"type": "auth_required", "action": "set"}))
-    async def auth_and_join(self, websocket: WebSocket, room_id: str, password: str):
-        if room_id not in self.room_passwords:
-            self.room_passwords[room_id] = password
-            if room_id not in self.active_connections: self.active_connections[room_id] = []
-            self.active_connections[room_id].append(websocket)
-            await websocket.send_text(json.dumps({"type": "auth_success"}))
-            return True
-        elif self.room_passwords.get(room_id) == password:
-            self.active_connections[room_id].append(websocket)
-            await websocket.send_text(json.dumps({"type": "auth_success"}))
-            return True
-        else:
-            await websocket.send_text(json.dumps({"type": "auth_fail"}))
-            return False
-    def disconnect(self, websocket: WebSocket, room_id: str):
-        if room_id in self.active_connections and websocket in self.active_connections[room_id]:
-            self.active_connections[room_id].remove(websocket)
-            if not self.active_connections[room_id]:
-                del self.active_connections[room_id]
-                if room_id in self.room_passwords: del self.room_passwords[room_id]
-    async def broadcast(self, message: str, room_id: str, sender: WebSocket):
-        if room_id in self.active_connections:
-            for connection in self.active_connections[room_id]:
-                if connection != sender: await connection.send_text(message)
-manager = ConnectionManager()
+# --- Модели Pydantic ---
+class TxnRequest(BaseModel):
+    txn_id: str
 
 # --- Эндпоинты ---
 @app.get("/", response_class=HTMLResponse)
@@ -112,20 +82,32 @@ async def start_trial():
     trial_keys[trial_key] = {"timestamp": time.time()}
     return {"trial_key": trial_key}
 
+@app.post("/verify-payment")
+async def verify_payment(request: TxnRequest):
+    if not request.txn_id or len(request.txn_id) < 10:
+        raise HTTPException(status_code=400, detail="Invalid Transaction ID.")
+    pro_key = f"PRO-{str(uuid.uuid4()).upper()}"
+    r_kv = redis.from_url(redis_url, decode_responses=True)
+    await r_kv.set(f"pro:{pro_key}", "active")
+    await r_kv.close()
+    return {"pro_key": pro_key}
+
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...), authorization: Optional[str] = Header(None)):
     is_pro = False
     max_size = MAX_FILE_SIZE
     if authorization and authorization.startswith("Bearer "):
         key = authorization.split("Bearer ")[1]
+        r_kv = redis.from_url(redis_url, decode_responses=True)
         if key.startswith("PRO-"):
-             if key in pro_keys: is_pro = True
+             if await r_kv.exists(f"pro:{key}"): is_pro = True
         else:
             key_info = trial_keys.get(key)
             if key_info and (time.time() - key_info["timestamp"]) < (30 * 24 * 60 * 60):
                 is_pro = True
             else:
                 trial_keys.pop(key, None)
+        await r_kv.close()
     if is_pro: max_size = PRO_MAX_FILE_SIZE
     
     file_extension = os.path.splitext(file.filename)[1].lower()
@@ -144,7 +126,9 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
         raise HTTPException(status_code=500, detail="Ошибка при загрузке файла в облако.")
 
     link_id = str(uuid.uuid4().hex[:10])
-    file_links[link_id] = {"url": file_url, "timestamp": time.time()}
+    r_kv = redis.from_url(redis_url, decode_responses=True)
+    await r_kv.setex(f"file:{link_id}", 900, file_url)
+    await r_kv.close()
     
     base_url = str(request.base_url).rstrip('/')
     one_time_link = f"{base_url}/file/{link_id}"
@@ -152,26 +136,48 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
 
 @app.get("/file/{link_id}")
 async def get_file_redirect(link_id: str):
-    link_info = file_links.pop(link_id, None)
-    if not link_info or (time.time() - link_info["timestamp"]) > 900:
-        raise HTTPException(status_code=404, detail="Link is invalid or has expired.")
-    return RedirectResponse(url=link_info["url"])
+    r_kv = redis.from_url(redis_url, decode_responses=True)
+    file_url = await r_kv.get(f"file:{link_id}")
+    if not file_url: raise HTTPException(status_code=404, detail="Link is invalid or has expired.")
+    await r_kv.delete(f"file:{link_id}")
+    await r_kv.close()
+    return RedirectResponse(url=file_url)
+
+# --- WebSocket с Redis Pub/Sub ---
+async def redis_reader(channel: redis.client.PubSub, websocket: WebSocket):
+    while True:
+        try:
+            message = await channel.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            if message is not None:
+                await websocket.send_text(message['data'].decode('utf-8'))
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"Redis reader error: {e}")
+            break
+
+async def websocket_reader(websocket: WebSocket, channel: str):
+    r_pub = redis.from_url(redis_url)
+    async for message in websocket.iter_text():
+        await r_pub.publish(channel, message)
+    await r_pub.close()
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    await manager.connect(websocket, room_id)
-    try:
-        auth_data_str = await websocket.receive_text()
-        auth_data = json.loads(auth_data_str)
-        if auth_data.get("type") == "auth":
-            password = auth_data.get("password")
-            is_authed = await manager.auth_and_join(websocket, room_id, password)
-            if not is_authed: return
-        else:
-            await websocket.close()
-            return
-        while True:
-            data = await websocket.receive_text()
-            await manager.broadcast(data, room_id, websocket)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, room_id)
+    await websocket.accept()
+    channel = f"chat:{room_id}"
+    r_sub = redis.from_url(redis_url)
+    pubsub = r_sub.pubsub()
+    await pubsub.subscribe(channel)
+
+    consumer_task = asyncio.create_task(redis_reader(pubsub, websocket))
+    producer_task = asyncio.create_task(websocket_reader(websocket, channel))
+    
+    done, pending = await asyncio.wait(
+        [consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED
+    )
+    for task in pending:
+        task.cancel()
+    
+    await pubsub.close()
+    await r_sub.close()

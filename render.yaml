@@ -1,6 +1,20 @@
 services:
   - type: web
-    name: lemma-project
+    name: lepko-app
     env: docker
-    plan: free # Или ваш платный тариф
+    plan: starter # Убедитесь, что здесь указан ваш платный тариф
     healthCheckPath: /?lang=ru
+    domains:
+      - lepko.chat
+      - www.lepko.chat
+    envVars:
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: lepko-redis # Убедитесь, что это имя вашего Redis-сервиса на Render

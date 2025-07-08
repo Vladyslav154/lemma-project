@@ -4,7 +4,7 @@ import json
 import asyncio
 from typing import Dict, List, Optional
 from fastapi import FastAPI, File, UploadFile, Request, HTTPException, WebSocket, WebSocketDisconnect, Query, Header
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -16,16 +16,13 @@ import time
 # --- Конфигурация ---
 load_dotenv()
 app = FastAPI()
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 cloudinary.config(
   cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
   api_key = os.getenv("CLOUDINARY_API_KEY"),
   api_secret = os.getenv("CLOUDINARY_API_SECRET"),
   secure = True
 )
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
@@ -78,9 +75,6 @@ class ConnectionManager:
                 if connection != sender: await connection.send_text(message)
 manager = ConnectionManager()
 
-class TxnRequest(BaseModel):
-    txn_id: str
-
 # --- Эндпоинты ---
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, lang: str = Query("ru", regex="ru|en")):
@@ -106,7 +100,7 @@ async def pad_room(request: Request, room_id: str, lang: str = Query("ru", regex
 async def upgrade_page(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
     return templates.TemplateResponse("upgrade.html", {"request": request, "t": t, "lang": lang})
-
+    
 @app.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request, lang: str = Query("ru", regex="ru|en")):
     def t(key: str) -> str: return translations.get(lang, {}).get(key, key)
@@ -117,14 +111,6 @@ async def start_trial():
     trial_key = str(uuid.uuid4())
     trial_keys[trial_key] = {"timestamp": time.time()}
     return {"trial_key": trial_key}
-    
-@app.post("/verify-payment")
-async def verify_payment(request: TxnRequest):
-    if not request.txn_id or len(request.txn_id) < 10:
-        raise HTTPException(status_code=400, detail="Invalid Transaction ID.")
-    pro_key = f"PRO-{str(uuid.uuid4()).upper()}"
-    pro_keys.add(pro_key)
-    return {"pro_key": pro_key}
 
 @app.post("/upload")
 async def upload_file(request: Request, file: UploadFile = File(...), authorization: Optional[str] = Header(None)):
@@ -133,16 +119,14 @@ async def upload_file(request: Request, file: UploadFile = File(...), authorizat
     if authorization and authorization.startswith("Bearer "):
         key = authorization.split("Bearer ")[1]
         if key.startswith("PRO-"):
-             if key in pro_keys:
-                is_pro = True
+             if key in pro_keys: is_pro = True
         else:
             key_info = trial_keys.get(key)
             if key_info and (time.time() - key_info["timestamp"]) < (30 * 24 * 60 * 60):
                 is_pro = True
             else:
                 trial_keys.pop(key, None)
-    if is_pro:
-        max_size = PRO_MAX_FILE_SIZE
+    if is_pro: max_size = PRO_MAX_FILE_SIZE
     
     file_extension = os.path.splitext(file.filename)[1].lower()
     if file_extension not in ALLOWED_EXTENSIONS:

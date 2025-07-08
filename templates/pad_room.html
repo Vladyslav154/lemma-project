@@ -1,68 +1,51 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div id="password-overlay">
-    <div class="form-container" id="password-box">
-        <h1 id="password-title"></h1>
-        <p id="password-subtitle"></p>
-        <form id="password-form" class="chat-form" style="display: none;">
-            <input type="password" id="password-input" placeholder="{{ t('password_placeholder') }}">
-            <button type="submit" id="password-button" class="button">{{ t('enter_button') }}</button>
-        </form>
-        <p id="password-error" class="error-message hidden"></p>
-    </div>
-</div>
-
-<div id="chat-container" class="hidden">
-    <div class="form-container">
-        <h1>{{ t('pad_page_title') }}</h1>
-        <p>{{ t('pad_room_subtitle') }} <strong>{{ room_id }}</strong></p>
-        <p class="disclaimer">{{ t('pad_disclaimer') }}</p>
-        <div id="chat-box" class="chat-box"></div>
-        <form id="message-form" class="chat-form">
-            <textarea id="message-input" placeholder="{{ t('message_placeholder') }}" rows="1"></textarea>
-            <button id="send-button" type="submit" class="button">➤</button>
-        </form>
+<div class="container mt-5">
+    <div class="card bg-dark text-white">
+        <div class="card-header">
+            Анонимная комната: <span id="room-id-display" class="text-info">{{ room_id }}</span>
+        </div>
+        <div class="card-body" id="chat-box" style="height: 400px; overflow-y: scroll;">
+            </div>
+        <div class="card-footer">
+            <form id="message-form">
+                <div class="input-group">
+                    <input type="text" id="message-input" class="form-control bg-secondary text-white" placeholder="Введите сообщение..." autocomplete="off">
+                    <button type="submit" class="btn btn-primary">Отправить</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const passwordOverlay = document.getElementById('password-overlay');
-        const passwordForm = document.getElementById('password-form');
-        const passwordInput = document.getElementById('password-input');
-        const passwordButton = document.getElementById('password-button');
-        const passwordError = document.getElementById('password-error');
-        const passwordTitle = document.getElementById('password-title');
-        const passwordSubtitle = document.getElementById('password-subtitle');
-        
-        const chatContainer = document.getElementById('chat-container');
-        const chatBox = document.getElementById('chat-box');
-        const messageForm = document.getElementById('message-form');
-        const messageInput = document.getElementById('message-input');
-        
+    document.addEventListener("DOMContentLoaded", function() {
         const roomId = "{{ room_id }}";
+        const chatBox = document.getElementById("chat-box");
+        const messageForm = document.getElementById("message-form");
+        const messageInput = document.getElementById("message-input");
+
+        // Устанавливаем WebSocket соединение
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws/${roomId}`;
-        const socket = new WebSocket(wsUrl);
+        const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${roomId}`);
 
-        const showChat = () => {
-            passwordOverlay.classList.add('hidden');
-            chatContainer.classList.remove('hidden');
-            messageInput.focus();
+        ws.onmessage = function(event) {
+            const message = document.createElement("p");
+            message.className = "text-light";
+            message.textContent = event.data;
+            chatBox.appendChild(message);
+            chatBox.scrollTop = chatBox.scrollHeight; // Автопрокрутка вниз
         };
 
-        const authenticate = () => {
-            const password = passwordInput.value;
-            if (password && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'auth', password: password }));
-                passwordError.classList.add('hidden');
+        messageForm.addEventListener("submit", function(event) {
+            event.preventDefault();
+            const message = messageInput.value;
+            if (message) {
+                ws.send(message);
+                messageInput.value = "";
             }
-        };
-
-        passwordButton.addEventListener('click', authenticate);
-        passwordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                authenticate();
-            }
+        });
+    });
+</script>
+{% endblock %}

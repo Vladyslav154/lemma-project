@@ -1,143 +1,51 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div id="password-overlay">
-    <div class="form-container">
-        <h1 id="password-title">Загрузка...</h1>
-        <p id="password-subtitle">Соединение с комнатой.</p>
-        <form id="password-form" class="chat-form">
-            <input type="password" id="password-input" placeholder="{{ t('password_placeholder') }}" autocomplete="off">
-            <button type="submit" id="password-button" class="button" disabled>{{ t('enter_button') }}</button>
-        </form>
-        <p id="password-error" class="error-message"></p>
-    </div>
-</div>
-
-<div id="chat-container" class="hidden">
-    <div class="form-container">
-        <h1>{{ t('pad_page_title') }}</h1>
-        <p>{{ t('pad_room_subtitle') }} <strong>{{ room_id }}</strong>. {{ t('pad_disclaimer') }}</p>
-        
-        <div id="messages" class="chat-box"></div>
-
-        <form id="message-form" class="chat-form">
-            <textarea id="message-input" placeholder="{{ t('message_placeholder') }}" rows="1"></textarea>
-            <div class="lifetime-controls">
-                <button type="button" class="lifetime-btn active" data-lifetime="10">10с</button>
-                <button type="button" class="lifetime-btn" data-lifetime="30">30с</button>
-                <button type="button" class="lifetime-btn" data-lifetime="120">2м</button>
+<div class="container mt-5">
+    <div class="card bg-dark text-white">
+        <div class="card-header">
+            Анонимная комната: <span id="room-id-display" class="text-info">{{ room_id }}</span>
+        </div>
+        <div class="card-body" id="chat-box" style="height: 400px; overflow-y: scroll;">
             </div>
-            <button type="submit" id="send-button" class="button">»</button>
-        </form>
+        <div class="card-footer">
+            <form id="message-form">
+                <div class="input-group">
+                    <input type="text" id="message-input" class="form-control bg-secondary text-white" placeholder="Введите сообщение..." autocomplete="off">
+                    <button type="submit" class="btn btn-primary">Отправить</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const passwordOverlay = document.getElementById('password-overlay');
-        const passwordForm = document.getElementById('password-form');
-        const passwordInput = document.getElementById('password-input');
-        const passwordButton = document.getElementById('password-button');
-        const passwordError = document.getElementById('password-error');
-        const passwordTitle = document.getElementById('password-title');
-        const passwordSubtitle = document.getElementById('password-subtitle');
-        const chatContainer = document.getElementById('chat-container');
-        const messageForm = document.getElementById('message-form');
-        const messageInput = document.getElementById('message-input');
-        const messagesContainer = document.getElementById('messages');
-        const lifetimeControls = document.querySelector('.lifetime-controls');
-        let selectedLifetime = 10;
-        
-        const room_id = "{{ room_id }}";
+    document.addEventListener("DOMContentLoaded", function() {
+        const roomId = "{{ room_id }}";
+        const chatBox = document.getElementById("chat-box");
+        const messageForm = document.getElementById("message-form");
+        const messageInput = document.getElementById("message-input");
+
+        // Устанавливаем WebSocket соединение
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws/${room_id}`;
-        const socket = new WebSocket(wsUrl);
+        const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${roomId}`);
 
-        function showChat() {
-            passwordOverlay.classList.add('hidden');
-            chatContainer.classList.remove('hidden');
-            messageInput.focus();
-        }
+        ws.onmessage = function(event) {
+            const message = document.createElement("p");
+            message.className = "text-light";
+            message.textContent = event.data;
+            chatBox.appendChild(message);
+            chatBox.scrollTop = chatBox.scrollHeight; // Автопрокрутка вниз
+        };
 
-        passwordInput.addEventListener('input', () => {
-            passwordButton.disabled = passwordInput.value.trim() === '';
-        });
-
-        passwordForm.onsubmit = function(event) {
+        messageForm.addEventListener("submit", function(event) {
             event.preventDefault();
-            const password = passwordInput.value;
-            if (passwordButton.disabled) return;
-            socket.send(JSON.stringify({ "type": "auth", "password": password }));
-        };
-
-        socket.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === "auth_required") {
-                passwordForm.style.display = 'flex';
-                if (data.action === 'set') {
-                    passwordTitle.textContent = "{{ t('password_set_title') }}";
-                    passwordSubtitle.textContent = "{{ t('password_set_subtitle') }}";
-                } else {
-                    passwordTitle.textContent = "{{ t('password_enter_title') }}";
-                    passwordSubtitle.textContent = "{{ t('password_enter_subtitle') }}";
-                }
-            } else if (data.type === "auth_success") {
-                showChat();
-                socket.onmessage = handleChatMessage;
-            } else if (data.type === "auth_fail") {
-                passwordError.textContent = data.message;
-                passwordInput.value = '';
-                passwordButton.disabled = true;
-            }
-        };
-        
-        socket.onerror = (error) => {
-            console.error("WebSocket Error:", error);
-            passwordTitle.textContent = "Ошибка соединения";
-            passwordSubtitle.style.display = 'none';
-        };
-
-        function handleChatMessage(event) {
-            const messageData = JSON.parse(event.data);
-            if (messageData.type === 'message') {
-                addMessageToUI(messageData, false);
-            }
-        }
-        
-        function addMessageToUI(messageData, isOwnMessage = false) {
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('chat-message');
-            messageElement.classList.toggle('my-message', isOwnMessage);
-            messageElement.classList.toggle('other-message', !isOwnMessage);
-            const sanitizedText = messageData.text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            messageElement.innerHTML = sanitizedText;
-            messagesContainer.appendChild(messageElement);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            setTimeout(() => {
-                messageElement.style.transition = 'opacity 0.5s ease';
-                messageElement.style.opacity = '0';
-                setTimeout(() => messageElement.remove(), 500);
-            }, messageData.lifetime * 1000);
-        }
-
-        lifetimeControls.addEventListener('click', (e) => {
-            if (e.target.classList.contains('lifetime-btn')) {
-                lifetimeControls.querySelectorAll('.lifetime-btn').forEach(btn => btn.classList.remove('active'));
-                e.target.classList.add('active');
-                selectedLifetime = parseInt(e.target.dataset.lifetime, 10);
+            const message = messageInput.value;
+            if (message) {
+                ws.send(message);
+                messageInput.value = "";
             }
         });
-
-        messageForm.onsubmit = function(event) {
-            event.preventDefault();
-            const messageText = messageInput.value;
-            if (messageText.trim() === '') return;
-            const messageData = { type: "message", text: messageText, lifetime: selectedLifetime };
-            socket.send(JSON.stringify(messageData));
-            addMessageToUI(messageData, true);
-            messageInput.value = '';
-        };
     });
 </script>
 {% endblock %}

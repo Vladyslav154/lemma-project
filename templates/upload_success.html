@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5 text-white" style="max-width: 600px;">
+    <h2 class="text-center mb-4">{{ t("upload_success_title") }}</h2>
+    <div class="alert alert-success text-center">
+        <p>{{ t("your_onetime_link") }}</p>
+        <div class="input-group">
+            <input type="text" class="form-control bg-dark text-white" value="{{ link }}" id="downloadLink" readonly>
+            <button class="btn btn-outline-secondary" onclick="copyLink()">{{ t("copy_button") }}</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyLink() {
+    var copyText = document.getElementById("downloadLink");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); // For mobile devices
+    document.execCommand("copy");
+    alert("{{ t('link_copied') }}");
+}
+</script>
+{% endblock %}

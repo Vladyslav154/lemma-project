@@ -1,11 +1,34 @@
 import os
 import uuid
-import asyncio
-from fastapi import FastAPI, Request, Form, HTTPException, WebSocket
+import json
+from fastapi import FastAPI, Request, Form, HTTPException, WebSocket, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 import redis.asyncio as redis
-from typing import Dict
+from typing import Dict, Callable
+
+# --- Логика перевода ---
+def load_translations() -> Dict[str, Dict[str, str]]:
+    translations = {}
+    for lang in ['en', 'ru']:
+        try:
+            with open(f'lang/{lang}.json', 'r', encoding='utf-8') as f:
+                translations[lang] = json.load(f)
+        except FileNotFoundError:
+            print(f"WARNING: Translation file lang/{lang}.json not found.")
+            translations[lang] = {}
+    return translations
+
+translations_data = load_translations()
+
+def get_translator(lang: str = 'ru') -> Callable[[str], str]:
+    default_lang_data = translations_data.get('ru', {})
+    lang_data = translations_data.get(lang, default_lang_data)
+
+    def translator(key: str) -> str:
+        return lang_data.get(key, key)
+
+    return translator
 
 # --- Инициализация ---
 app = FastAPI()
@@ -16,7 +39,7 @@ redis_url = os.getenv("REDIS_URL", "redis://localhost")
 redis_client = redis.from_url(redis_url, decode_responses=True)
 
 
-# --- Класс для управления WebSocket соединениями ---
+# --- Класс для управления WebSocket ---
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, list[WebSocket]] = {}
@@ -42,33 +65,34 @@ manager = ConnectionManager()
 # --- Маршруты HTTP ---
 
 @app.get("/", response_class=HTMLResponse)
-async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def read_root(request: Request, lang: str = 'ru'):
+    t = get_translator(lang)
+    return templates.TemplateResponse("index.html", {"request": request, "t": t, "lang": lang})
 
 @app.get("/about", response_class=HTMLResponse)
-async def about_page(request: Request):
-    return templates.TemplateResponse("about.html", {"request": request})
+async def about_page(request: Request, lang: str = 'ru'):
+    t = get_translator(lang)
+    return templates.TemplateResponse("about.html", {"request": request, "t": t, "lang": lang})
 
 @app.post("/create_pad")
-async def create_pad(request: Request):
+async def create_pad(request: Request, lang: str = 'ru'):
     room_id = str(uuid.uuid4().hex)[:8]
     await redis_client.set(f"pad:{room_id}:exists", "1", ex=3600)
-    return RedirectResponse(url=f"/pad/{room_id}", status_code=303)
+    return RedirectResponse(url=f"/pad/{room_id}?lang={lang}", status_code=303)
 
 @app.get("/pad/{room_id}", response_class=HTMLResponse)
-async def get_pad(request: Request, room_id: str):
+async def get_pad(request: Request, room_id: str, lang: str = 'ru'):
     if not await redis_client.exists(f"pad:{room_id}:exists"):
         raise HTTPException(status_code=404, detail="Комната не найдена или срок ее действия истек.")
-    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id})
+    
+    t = get_translator(lang)
+    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
 
 
 # --- Маршрут WebSocket ---
 
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    """
-    Обрабатывает WebSocket соединения для комнат чата. (ИСПРАВЛЕННАЯ ВЕРСИЯ)
-    """
     if not await redis_client.exists(f"pad:{room_id}:exists"):
         await websocket.close(code=1008)
         return
@@ -77,7 +101,6 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str):
     try:
         while True:
             data = await websocket.receive_text()
-            # Просто транслируем полученное сообщение всем в комнате
             await manager.broadcast(data, room_id)
     except Exception:
         manager.disconnect(websocket, room_id)

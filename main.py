@@ -4,8 +4,18 @@ import json
 from fastapi import FastAPI, Request, Form, HTTPException, WebSocket, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles # <-- Добавили этот импорт
 import redis.asyncio as redis
 from typing import Dict, Callable
+
+# --- Инициализация ---
+app = FastAPI()
+
+# --- ПОДКЛЮЧАЕМ СТАТИЧЕСКИЕ ФАЙЛЫ (CSS, JS) ---
+# Это та самая строка, которую мы забыли.
+# Она говорит приложению, что все файлы из папки 'static' должны быть доступны по адресу '/static'
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 # --- Логика перевода ---
 def load_translations() -> Dict[str, Dict[str, str]]:
@@ -29,10 +39,6 @@ def get_translator(lang: str = 'ru') -> Callable[[str], str]:
         return lang_data.get(key, key)
 
     return translator
-
-# --- Инициализация ---
-app = FastAPI()
-templates = Jinja2Templates(directory="templates")
 
 # Подключение к Redis
 redis_url = os.getenv("REDIS_URL", "redis://localhost")
@@ -82,25 +88,4 @@ async def create_pad(request: Request, lang: str = 'ru'):
 
 @app.get("/pad/{room_id}", response_class=HTMLResponse)
 async def get_pad(request: Request, room_id: str, lang: str = 'ru'):
-    if not await redis_client.exists(f"pad:{room_id}:exists"):
-        raise HTTPException(status_code=404, detail="Комната не найдена или срок ее действия истек.")
-    
-    t = get_translator(lang)
-    return templates.TemplateResponse("pad_room.html", {"request": request, "room_id": room_id, "t": t, "lang": lang})
-
-
-# --- Маршрут WebSocket ---
-
-@app.websocket("/ws/{room_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str):
-    if not await redis_client.exists(f"pad:{room_id}:exists"):
-        await websocket.close(code=1008)
-        return
-
-    await manager.connect(websocket, room_id)
-    try:
-        while True:
-            data = await websocket.receive_text()
-            await manager.broadcast(data, room_id)
-    except Exception:
-        manager.disconnect(websocket, room_id)
+    if not

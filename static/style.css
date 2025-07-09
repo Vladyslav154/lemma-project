@@ -134,3 +134,22 @@ textarea#message-input {
 #password-button:hover:not(:disabled) { opacity: 0.8; }
 #password-button:disabled { background-color: #21262d; border-color: #30363d; color: #8b949e; cursor: not-allowed; }
 .error-message { color: #ff7b72; margin-top: 1rem; font-weight: bold; }
+.about-link-container {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.about-link {
+    color: #00bcd4; /* Неоновый цвет */
+    text-decoration: none;
+    border: 1px solid #00bcd4;
+    padding: 8px 16px;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+}
+
+.about-link:hover {
+    background-color: #00bcd4;
+    color: #1a1a1a;
+    box-shadow: 0 0 15px #00bcd4;
+}
